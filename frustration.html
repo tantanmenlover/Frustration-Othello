@@ -1,0 +1,772 @@
+<div id="app"></div>
+<style>
+#app {
+  --bg: #14161c;
+  --panel: #1b1e26;
+  --panel-line: #2a2e3a;
+  --text: #e8e6df;
+  --text-dim: #8b8f9c;
+  --amber: #e8a33d;
+  --teal: #4fb8a6;
+  --danger: #e8695f;
+  --black-piece: #2b2b2f;
+  --black-piece-hi: #4a4a52;
+  --white-piece: #f2efe6;
+  --white-piece-hi: #ffffff;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  padding: 24px;
+  border-radius: 12px;
+  max-width: 880px;
+  margin: 0 auto;
+  position: relative;
+}
+#app * { box-sizing: border-box; }
+.fo-header { margin-bottom: 16px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.fo-title { font-size: 22px; font-weight: 700; letter-spacing: 0.02em; margin: 0; }
+.fo-back {
+  background: none; border: 1px solid var(--panel-line); color: var(--text-dim);
+  padding: 6px 12px; border-radius: 999px; font-size: 12px; cursor: pointer;
+}
+.fo-back:hover { color: var(--text); border-color: var(--text-dim); }
+
+.fo-rules { font-size: 12px; color: var(--text-dim); margin: 0 0 18px 0; }
+.fo-rules summary { cursor: pointer; color: var(--teal); font-weight: 600; }
+.fo-rules[open] summary { margin-bottom: 6px; }
+.fo-rules p { margin: 4px 0; line-height: 1.7; }
+
+/* menu */
+.fo-menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.fo-mode-card {
+  background: var(--panel); border: 1px solid var(--panel-line); border-radius: 12px;
+  padding: 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.fo-mode-card h3 { margin: 0; font-size: 15px; }
+.fo-mode-card p.desc { margin: 0; font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+.fo-field-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.fo-tab-row { display: flex; gap: 6px; }
+.fo-tab-btn {
+  flex: 1; background: #0e0f13; border: 1px solid var(--panel-line); color: var(--text-dim);
+  padding: 6px 8px; border-radius: 8px; font-size: 12px; cursor: pointer;
+}
+.fo-tab-btn.active { color: var(--text); border-color: var(--teal); background: #16232190; }
+.fo-code-input {
+  background: #0e0f13; border: 1px solid var(--panel-line); color: var(--text);
+  padding: 8px; border-radius: 6px; font-size: 16px; letter-spacing: 0.2em; text-align: center; width: 100%;
+}
+
+/* shared card / layout */
+.fo-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.fo-board-wrap { position: relative; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; padding: 10px; flex: 1 1 420px; min-width: 300px; }
+.fo-side { flex: 0 0 220px; display: flex; flex-direction: column; gap: 12px; min-width: 200px; }
+.fo-card { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; padding: 12px 14px; }
+.fo-card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 0 0 8px 0; font-weight: 600; }
+.fo-turn-row { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.fo-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid rgba(255,255,255,0.25); }
+.fo-hint { font-size: 12px; color: var(--text-dim); margin-top: 4px; line-height: 1.6; }
+.fo-score-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 6px; }
+.fo-score-bar { height: 8px; border-radius: 4px; overflow: hidden; background: #0e0f13; display: flex; margin-top: 4px; }
+.fo-btn {
+  background: #262a35; border: 1px solid var(--panel-line); color: var(--text);
+  padding: 8px 12px; border-radius: 8px; font-size: 12.5px; cursor: pointer; width: 100%;
+}
+.fo-btn:hover { background: #2f3441; }
+.fo-btn.primary { background: var(--teal); border-color: var(--teal); color: #08201c; font-weight: 700; }
+.fo-btn.primary:hover { filter: brightness(1.08); }
+.fo-btn.ghost { background: transparent; }
+.fo-select {
+  background: #0e0f13; border: 1px solid var(--panel-line); color: var(--text);
+  padding: 6px 8px; border-radius: 6px; font-size: 12.5px; width: 100%; margin-top: 6px;
+}
+.fo-badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #0e0f13; border: 1px solid var(--panel-line); color: var(--text-dim); }
+
+/* big winner overlay */
+.fo-winner-overlay {
+  position: absolute; inset: 0; z-index: 15; border-radius: 8px;
+  background: rgba(10,11,15,0.86);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center; padding: 20px;
+  animation: fo-winner-in 0.35s ease;
+}
+@keyframes fo-winner-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+.fo-winner-label { font-size: 12px; letter-spacing: 0.15em; color: var(--text-dim); text-transform: uppercase; }
+.fo-winner-big { font-size: 46px; font-weight: 800; line-height: 1.2; }
+.fo-winner-big.win-b { color: var(--white-piece-hi); }
+.fo-winner-big.win-w { color: var(--white-piece-hi); }
+.fo-winner-big.win-draw { color: var(--amber); }
+.fo-winner-score { font-size: 15px; color: var(--text-dim); }
+.fo-winner-overlay .fo-btn { width: auto; padding: 10px 22px; margin-top: 6px; }
+
+/* waiting screen */
+.fo-waiting-wrap { text-align: center; padding: 30px 10px; }
+.fo-code-display {
+  font-size: 34px; font-weight: 800; letter-spacing: 0.25em; color: var(--amber);
+  background: #0e0f13; border: 1px dashed var(--panel-line); border-radius: 10px;
+  padding: 14px 10px; margin: 14px auto; max-width: 260px;
+}
+.fo-spinner { width: 22px; height: 22px; border: 3px solid var(--panel-line); border-top-color: var(--teal); border-radius: 50%; margin: 14px auto; animation: fo-spin 0.9s linear infinite; }
+@keyframes fo-spin { to { transform: rotate(360deg); } }
+
+/* toast */
+.fo-toast {
+  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+  background: #1f2430; border: 1px solid var(--panel-line); color: var(--text);
+  padding: 8px 16px; border-radius: 999px; font-size: 12.5px; box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  opacity: 0; transition: opacity 0.25s ease; pointer-events: none; z-index: 20; white-space: nowrap;
+}
+.fo-toast.show { opacity: 1; }
+
+svg { display: block; width: 100%; height: auto; }
+.node-empty { fill: #0e0f13; stroke: #33384a; stroke-width: 1.2; cursor: pointer; }
+.node-empty:hover { fill: #1c2130; }
+
+.piece { cursor: default; }
+.piece-group { cursor: default; }
+.piece-group.choosable { cursor: pointer; }
+.piece-group.choosable:hover .piece { filter: brightness(1.25); }
+
+.frustrated-ring { fill: none; stroke: var(--amber); stroke-width: 2; }
+.frustrated-ring.choosable { stroke-width: 3; cursor: pointer; }
+@keyframes fo-pulse { 0%,100% { stroke-opacity: 0.5; } 50% { stroke-opacity: 1; } }
+.frustrated-ring.choosable { animation: fo-pulse 1.1s ease-in-out infinite; }
+@keyframes fo-shake {
+  0%, 100% { transform: translate(0,0); }
+  20% { transform: translate(-0.7px, 0.5px); }
+  40% { transform: translate(0.6px, -0.6px); }
+  60% { transform: translate(-0.5px, -0.5px); }
+  80% { transform: translate(0.7px, 0.4px); }
+}
+.piece-group.frustrated, .frustrated-ring.frustrated {
+  transform-box: fill-box; transform-origin: center;
+  animation: fo-shake 0.28s infinite;
+}
+.edge { stroke: #262a35; stroke-width: 1.5; }
+.face-line { stroke-linecap: round; fill: none; }
+</style>
+<script>
+(function () {
+  const root = document.getElementById('app');
+  const myClientId = 'p_' + Math.random().toString(36).slice(2, 10);
+
+  // ---------- pure game logic (works on a plain, JSON-serializable state object) ----------
+  const DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]];
+  const key = (q,r) => q + ',' + r;
+  const parseKey = (k) => { const [q,r] = k.split(',').map(Number); return {q,r}; };
+
+  function allKeys(R){
+    const out = [];
+    for(let q=-R;q<=R;q++){
+      for(let r=-R;r<=R;r++){
+        const s = -q-r;
+        if(Math.max(Math.abs(q),Math.abs(r),Math.abs(s))<=R) out.push(key(q,r));
+      }
+    }
+    return out;
+  }
+
+  function createGameState(R){
+    const nodes = {};
+    for(const k of allKeys(R)) nodes[k] = null;
+    return { R, nodes, turn: 'B', phase: 'place', pendingFrustrated: [], over: false, seq: 0, players: null };
+  }
+
+  function buildEdges(R){
+    const keys = allKeys(R);
+    const set = new Set(keys);
+    const seen = new Set();
+    const edges = [];
+    for(const k of keys){
+      const {q,r} = parseKey(k);
+      for(const [dq,dr] of DIRS){
+        const k2 = key(q+dq, r+dr);
+        if(set.has(k2)){
+          const a = k < k2 ? k : k2, b = k < k2 ? k2 : k;
+          const ek = a+'|'+b;
+          if(!seen.has(ek)){ seen.add(ek); edges.push([a,b]); }
+        }
+      }
+    }
+    return edges;
+  }
+
+  function neighborsOf(state, nk){
+    const {q,r} = parseKey(nk);
+    const out = [];
+    for(const [dq,dr] of DIRS){
+      const k2 = key(q+dq, r+dr);
+      if(k2 in state.nodes) out.push(k2);
+    }
+    return out;
+  }
+
+  function frustrationOf(state, nk){
+    const color = state.nodes[nk];
+    if(!color) return {p:0, same:0, occ:0};
+    let same=0, occ=0;
+    for(const k2 of neighborsOf(state, nk)){
+      const c2 = state.nodes[k2];
+      if(c2){ occ++; if(c2===color) same++; }
+    }
+    return {p: same/6, same, occ};
+  }
+
+  function getFrustratedNodes(state){
+    const out = [];
+    for(const nk in state.nodes){
+      if(state.nodes[nk] && frustrationOf(state, nk).same>0) out.push(nk);
+    }
+    return out;
+  }
+
+  function boardFull(state){
+    for(const nk in state.nodes) if(!state.nodes[nk]) return false;
+    return true;
+  }
+
+  function pieceCounts(state){
+    let b=0,w=0;
+    for(const nk in state.nodes){
+      if(state.nodes[nk]==='B') b++; else if(state.nodes[nk]==='W') w++;
+    }
+    return {b,w};
+  }
+
+  function endTurnOrGame(state){
+    if(boardFull(state)) state.over = true;
+    else state.turn = state.turn==='B' ? 'W' : 'B';
+  }
+
+  function applyPlace(state, nk){
+    if(state.over || state.phase!=='place') return false;
+    if(state.nodes[nk]) return false;
+    state.nodes[nk] = state.turn;
+    const frustrated = getFrustratedNodes(state);
+    if(frustrated.length>0){
+      state.phase = 'flip';
+      state.pendingFrustrated = frustrated;
+    } else {
+      endTurnOrGame(state);
+    }
+    state.seq = (state.seq||0) + 1;
+    return true;
+  }
+
+  function applyFlip(state, nk){
+    if(state.phase!=='flip') return false;
+    if(!state.pendingFrustrated.includes(nk)) return false;
+    state.nodes[nk] = state.nodes[nk]==='B' ? 'W' : 'B';
+    state.phase = 'place';
+    state.pendingFrustrated = [];
+    endTurnOrGame(state);
+    state.seq = (state.seq||0) + 1;
+    return true;
+  }
+
+  function cloneState(state){ return JSON.parse(JSON.stringify(state)); }
+
+  // ---------- simple CPU ----------
+  function cpuBestFlip(state, cpuColor){
+    let bestVal = -Infinity, bestChoice = state.pendingFrustrated[0];
+    for(const nk of state.pendingFrustrated){
+      const s2 = cloneState(state);
+      applyFlip(s2, nk);
+      const {b,w} = pieceCounts(s2);
+      const val = cpuColor==='B' ? (b-w) : (w-b);
+      if(val > bestVal){ bestVal = val; bestChoice = nk; }
+    }
+    return { choice: bestChoice, val: bestVal };
+  }
+
+  function cpuChoosePlacement(state, cpuColor){
+    let best = null, bestVal = -Infinity;
+    const empties = Object.keys(state.nodes).filter(k => !state.nodes[k]);
+    for(const nk of empties){
+      const s2 = cloneState(state);
+      applyPlace(s2, nk);
+      let val;
+      if(s2.phase==='flip') val = cpuBestFlip(s2, cpuColor).val;
+      else { const {b,w} = pieceCounts(s2); val = cpuColor==='B' ? (b-w) : (w-b); }
+      val += Math.random()*0.01; // avoid fully robotic ties
+      if(val > bestVal){ bestVal = val; best = nk; }
+    }
+    return best;
+  }
+
+  // ---------- app state ----------
+  let screen = 'menu'; // 'menu' | 'waiting' | 'game'
+  let appMode = null;  // 'local' | 'cpu' | 'online'
+  let game = null;
+  let humanColor = null; // for cpu mode: which color the human plays
+  let onlineTab = 'create'; // 'create' | 'join'
+  let onlineCode = null;
+  let myColor = null; // for online mode
+  let pollTimer = null;
+  let lastSeq = -1;
+  let toastTimer = null;
+  const uiPrefs = { radiusLocal: 2, radiusCpu: 2, cpuColorChoice: 'B', radiusOnline: 2, joinCode: '' };
+
+  function showToast(msg){
+    let el = root.querySelector('.fo-toast');
+    if(!el){
+      el = document.createElement('div');
+      el.className = 'fo-toast';
+      root.appendChild(el);
+    }
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+
+  function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer = null; } }
+
+  function goMenu(){
+    stopPolling();
+    appMode = null; game = null; humanColor = null; onlineCode = null; myColor = null; lastSeq = -1;
+    screen = 'menu';
+    render();
+  }
+
+  // ---------- local / cpu move handlers ----------
+  function canInteract(){
+    if(!game || game.over) return false;
+    if(appMode==='local') return true;
+    if(appMode==='cpu') return game.turn===humanColor;
+    if(appMode==='online') return game.turn===myColor;
+    return false;
+  }
+
+  function afterMove(frustratedBefore){
+    if(appMode==='online') pushOnlineState();
+    render();
+    if(appMode==='cpu') scheduleCpuIfNeeded();
+  }
+
+  function handlePlaceClick(nk){
+    if(!canInteract() || game.phase!=='place') return;
+    const ok = applyPlace(game, nk);
+    if(!ok) return;
+    if(game.phase==='flip') showToast('フラストレーション発生!金色のコマから1つ選んで反転できます');
+    else if(game.over) showToast('対局終了!');
+    afterMove();
+  }
+
+  function handleFlipClick(nk){
+    if(!canInteract() || game.phase!=='flip') return;
+    const ok = applyFlip(game, nk);
+    if(!ok) return;
+    showToast('コマを反転しました');
+    if(game.over) showToast('対局終了!');
+    afterMove();
+  }
+
+  function scheduleCpuIfNeeded(){
+    if(!game || game.over || appMode!=='cpu') return;
+    const cpuColor = humanColor==='B' ? 'W' : 'B';
+    if(game.turn !== cpuColor) return;
+    setTimeout(() => {
+      if(!game || game.over) return;
+      if(game.phase==='place'){
+        const nk = cpuChoosePlacement(game, cpuColor);
+        if(nk) applyPlace(game, nk);
+        if(game.phase==='flip') showToast('相手にフラストレーションが発生しました');
+      } else if(game.phase==='flip'){
+        const { choice } = cpuBestFlip(game, cpuColor);
+        applyFlip(game, choice);
+      }
+      if(game.over) showToast('対局終了!');
+      render();
+      scheduleCpuIfNeeded();
+    }, 600);
+  }
+
+  // ---------- online ----------
+  async function createRoom(R){
+    const code = String(Math.floor(1000 + Math.random()*9000));
+    const st = createGameState(R);
+    st.players = { B: myClientId, W: null };
+    try{
+      const res = await window.storage.set('room:'+code, JSON.stringify(st), true);
+      if(!res){ showToast('部屋の作成に失敗しました'); return; }
+      onlineCode = code; myColor = 'B'; game = st; lastSeq = st.seq;
+      appMode = 'online'; screen = 'waiting';
+      render();
+      startPolling();
+    }catch(e){ showToast('部屋の作成に失敗しました'); }
+  }
+
+  async function joinRoom(codeRaw){
+    const code = (codeRaw||'').trim();
+    if(!code){ showToast('部屋番号を入力してください'); return; }
+    try{
+      const res = await window.storage.get('room:'+code, true);
+      if(!res){ showToast('部屋が見つかりません'); return; }
+      const st = JSON.parse(res.value);
+      if(!st.players) st.players = { B: null, W: null };
+      if(st.players.W && st.players.W !== myClientId){ showToast('この部屋は満室です'); return; }
+      st.players.W = myClientId;
+      st.seq = (st.seq||0) + 1;
+      const res2 = await window.storage.set('room:'+code, JSON.stringify(st), true);
+      if(!res2){ showToast('参加に失敗しました'); return; }
+      onlineCode = code; myColor = 'W'; game = st; lastSeq = st.seq;
+      appMode = 'online';
+      screen = (st.players.B && st.players.W) ? 'game' : 'waiting';
+      render();
+      startPolling();
+    }catch(e){ showToast('参加に失敗しました。番号を確認してください'); }
+  }
+
+  function startPolling(){
+    stopPolling();
+    pollTimer = setInterval(pollRoom, 1200);
+  }
+
+  async function pollRoom(){
+    if(!onlineCode) return;
+    try{
+      const res = await window.storage.get('room:'+onlineCode, true);
+      if(!res) return;
+      const st = JSON.parse(res.value);
+      if((st.seq||0) !== lastSeq){
+        const wasFlip = game && game.phase==='flip';
+        game = st; lastSeq = st.seq;
+        if(screen==='waiting' && st.players && st.players.B && st.players.W){
+          showToast('相手が参加しました!');
+          screen = 'game';
+        }
+        if(screen==='game' && game.phase==='flip' && !wasFlip && game.turn!==myColor){
+          showToast('相手にフラストレーションが発生しました');
+        }
+        if(game.over) showToast('対局終了!');
+        render();
+      }
+    }catch(e){ /* 通信エラーは静かに無視し、次のポーリングで再試行 */ }
+  }
+
+  async function pushOnlineState(){
+    if(!onlineCode || !game) return;
+    try{
+      const res = await window.storage.set('room:'+onlineCode, JSON.stringify(game), true);
+      if(res) lastSeq = game.seq;
+    }catch(e){ showToast('同期に失敗しました。通信をご確認ください'); }
+  }
+
+  // ---------- start helpers ----------
+  function startLocal(R){
+    appMode = 'local'; humanColor = null;
+    game = createGameState(R);
+    screen = 'game';
+    render();
+  }
+
+  function startCpu(R, playerColor){
+    appMode = 'cpu'; humanColor = playerColor;
+    game = createGameState(R);
+    screen = 'game';
+    render();
+    scheduleCpuIfNeeded();
+  }
+
+  // ---------- rendering helpers ----------
+  function pixelOf(size, nk){
+    const {q,r} = parseKey(nk);
+    return { x: size*(q + r/2), y: size*(r*Math.sqrt(3)/2) };
+  }
+
+  function faceSvg(cx, cy, radius, color, p){
+    const eyeDy = -radius*0.15, eyeDx = radius*0.35, eyeR = radius*0.09;
+    const stroke = color==='B' ? '#c9c9d0' : '#3a3a3a';
+    const mouthY = radius*0.35;
+    const curl = p>0 ? -(radius*0.22*Math.min(p,1) + radius*0.05) : radius*0.18;
+    const mouthPath = `M ${cx-radius*0.3} ${cy+mouthY} Q ${cx} ${cy+mouthY+curl} ${cx+radius*0.3} ${cy+mouthY}`;
+    return `
+      <g style="pointer-events: none;">
+        <circle cx="${cx-eyeDx}" cy="${cy+eyeDy}" r="${eyeR}" fill="${stroke}"/>
+        <circle cx="${cx+eyeDx}" cy="${cy+eyeDy}" r="${eyeR}" fill="${stroke}"/>
+        <path class="face-line" d="${mouthPath}" stroke="${stroke}" stroke-width="${radius*0.09}"/>
+      </g>
+    `;
+  }
+
+  function rulesHtml(){
+    return `<details class="fo-rules">
+      <summary>遊び方を見る</summary>
+      <p>三角格子のノードに、交互にコマを置いていきます。</p>
+      <p>置いたことで盤面上に「同じ色が隣り合うコマ(フラストレーション)」ができると、そのコマが金色に光り、震え出します。このとき、光っているコマの中から1つを選んで色を反転させることができます。</p>
+      <p>盤面が全て埋まったら終了。コマの数が多い方の勝ちです。</p>
+    </details>`;
+  }
+
+  // ---------- screen: menu ----------
+  function renderMenu(){
+    root.innerHTML = `
+      <div class="fo-header"><p class="fo-title">フラストレーションオセロ</p></div>
+      ${rulesHtml()}
+      <div class="fo-menu-grid">
+        <div class="fo-mode-card">
+          <h3>ローカル対戦</h3>
+          <p class="desc">同じ画面で2人が交互にプレイします。</p>
+          <div class="fo-field-row">
+            <span>盤の大きさ</span>
+            <select class="fo-select" id="fo-local-radius" style="margin-top:0;width:auto;">
+              <option value="1" ${uiPrefs.radiusLocal===1?'selected':''}>7ノード</option>
+              <option value="2" ${uiPrefs.radiusLocal===2?'selected':''}>19ノード</option>
+              <option value="3" ${uiPrefs.radiusLocal===3?'selected':''}>37ノード</option>
+            </select>
+          </div>
+          <button class="fo-btn primary" id="fo-start-local">対局を始める</button>
+        </div>
+
+        <div class="fo-mode-card">
+          <h3>CPU対戦</h3>
+          <p class="desc">CPUと対戦します。</p>
+          <div class="fo-field-row">
+            <span>あなたの色</span>
+            <select class="fo-select" id="fo-cpu-color" style="margin-top:0;width:auto;">
+              <option value="B" ${uiPrefs.cpuColorChoice==='B'?'selected':''}>● 黒(先手)</option>
+              <option value="W" ${uiPrefs.cpuColorChoice==='W'?'selected':''}>○ 白(後手)</option>
+            </select>
+          </div>
+          <div class="fo-field-row">
+            <span>盤の大きさ</span>
+            <select class="fo-select" id="fo-cpu-radius" style="margin-top:0;width:auto;">
+              <option value="1" ${uiPrefs.radiusCpu===1?'selected':''}>7ノード</option>
+              <option value="2" ${uiPrefs.radiusCpu===2?'selected':''}>19ノード</option>
+              <option value="3" ${uiPrefs.radiusCpu===3?'selected':''}>37ノード</option>
+            </select>
+          </div>
+          <button class="fo-btn primary" id="fo-start-cpu">対局を始める</button>
+        </div>
+
+        <div class="fo-mode-card">
+          <h3>オンライン対戦</h3>
+          <p class="desc">2人でネット越しに対戦します。部屋番号を共有してください。</p>
+          <div class="fo-tab-row">
+            <button class="fo-tab-btn ${onlineTab==='create'?'active':''}" id="fo-tab-create">部屋を作る</button>
+            <button class="fo-tab-btn ${onlineTab==='join'?'active':''}" id="fo-tab-join">部屋に入る</button>
+          </div>
+          ${onlineTab==='create' ? `
+            <div class="fo-field-row">
+              <span>盤の大きさ</span>
+              <select class="fo-select" id="fo-online-radius" style="margin-top:0;width:auto;">
+                <option value="1" ${uiPrefs.radiusOnline===1?'selected':''}>7ノード</option>
+                <option value="2" ${uiPrefs.radiusOnline===2?'selected':''}>19ノード</option>
+                <option value="3" ${uiPrefs.radiusOnline===3?'selected':''}>37ノード</option>
+              </select>
+            </div>
+            <button class="fo-btn primary" id="fo-create-room">部屋を作成(あなたは黒)</button>
+          ` : `
+            <input class="fo-code-input" id="fo-join-code" maxlength="4" placeholder="0000" value="${uiPrefs.joinCode}"/>
+            <button class="fo-btn primary" id="fo-join-room">参加する(あなたは白)</button>
+          `}
+          <p class="fo-hint">※盤面データは部屋番号を知っている人同士で共有されます。</p>
+        </div>
+      </div>
+    `;
+
+    root.querySelector('#fo-local-radius').addEventListener('change', e => { uiPrefs.radiusLocal = parseInt(e.target.value,10); });
+    root.querySelector('#fo-start-local').addEventListener('click', () => startLocal(uiPrefs.radiusLocal));
+
+    root.querySelector('#fo-cpu-color').addEventListener('change', e => { uiPrefs.cpuColorChoice = e.target.value; });
+    root.querySelector('#fo-cpu-radius').addEventListener('change', e => { uiPrefs.radiusCpu = parseInt(e.target.value,10); });
+    root.querySelector('#fo-start-cpu').addEventListener('click', () => startCpu(uiPrefs.radiusCpu, uiPrefs.cpuColorChoice));
+
+    root.querySelector('#fo-tab-create').addEventListener('click', () => { onlineTab='create'; render(); });
+    root.querySelector('#fo-tab-join').addEventListener('click', () => { onlineTab='join'; render(); });
+    if(onlineTab==='create'){
+      root.querySelector('#fo-online-radius').addEventListener('change', e => { uiPrefs.radiusOnline = parseInt(e.target.value,10); });
+      root.querySelector('#fo-create-room').addEventListener('click', () => createRoom(uiPrefs.radiusOnline));
+    } else {
+      const input = root.querySelector('#fo-join-code');
+      input.addEventListener('input', e => { uiPrefs.joinCode = e.target.value; });
+      root.querySelector('#fo-join-room').addEventListener('click', () => joinRoom(input.value));
+    }
+  }
+
+  // ---------- screen: waiting (online, before opponent joins) ----------
+  function renderWaiting(){
+    root.innerHTML = `
+      <div class="fo-header">
+        <p class="fo-title">フラストレーションオセロ</p>
+        <button class="fo-back" id="fo-leave">× やめる</button>
+      </div>
+      <div class="fo-mode-card fo-waiting-wrap" style="max-width:420px;margin:0 auto;">
+        <h3>対戦相手を待っています…</h3>
+        <p class="desc">この番号を相手に伝えてください</p>
+        <div class="fo-code-display">${onlineCode}</div>
+        <div class="fo-spinner"></div>
+        <p class="fo-hint">あなたは ● 黒 です。相手が参加すると自動的に対局が始まります。</p>
+      </div>
+    `;
+    root.querySelector('#fo-leave').addEventListener('click', goMenu);
+  }
+
+  // ---------- screen: game ----------
+  function renderGame(){
+    const size = 46;
+    const R = game.R;
+    const edges = buildEdges(R);
+    const keys = Object.keys(game.nodes);
+    const pts = keys.map(k => pixelOf(size, k));
+    const pad = size*0.9;
+    const minX = Math.min(...pts.map(p=>p.x)) - pad;
+    const maxX = Math.max(...pts.map(p=>p.x)) + pad;
+    const minY = Math.min(...pts.map(p=>p.y)) - pad;
+    const maxY = Math.max(...pts.map(p=>p.y)) + pad;
+    const boardW = maxX-minX, boardH = maxY-minY;
+
+    let edgesSvg = '';
+    for(const [a,b] of edges){
+      const pa = pixelOf(size, a), pb = pixelOf(size, b);
+      edgesSvg += `<line class="edge" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}"/>`;
+    }
+
+    const radius = size*0.4;
+    const interactive = canInteract();
+    const choosable = new Set(game.phase==='flip' && interactive ? game.pendingFrustrated : []);
+    let nodesSvg = '';
+    for(const nk of keys){
+      const p = pixelOf(size, nk);
+      const color = game.nodes[nk];
+      if(!color){
+        const clickable = interactive && game.phase==='place' && !game.over;
+        nodesSvg += `<circle class="node-empty" cx="${p.x}" cy="${p.y}" r="${radius*0.55}" data-key="${nk}" style="${clickable?'':'pointer-events:none;opacity:0.4;'}"/>`;
+      } else {
+        const {p: frP} = frustrationOf(game, nk);
+        const fill = color==='B' ? 'var(--black-piece)' : 'var(--white-piece)';
+        const isChoosable = choosable.has(nk);
+        
+        // --- 座標(q,r)から一意なマイナスのアニメーション遅延時間を計算してバラバラにする ---
+        const {q, r} = parseKey(nk);
+        // 位置によって 0秒 〜 -0.99秒 の遅延を作る
+        const delayVal = (Math.abs(q * 17 + r * 23) % 100) / 100 * -1.0; 
+        const animDelay = `animation-delay: ${delayVal.toFixed(2)}s;`;
+
+        if(frP>0){
+          const ringClass = 'frustrated-ring frustrated' + (isChoosable ? ' choosable' : '');
+          // リングのアニメーションもずらす
+          nodesSvg += `<circle class="${ringClass}" cx="${p.x}" cy="${p.y}" r="${radius+3}" style="stroke-opacity:${0.35+0.65*Math.min(frP,1)}; ${animDelay}" ${isChoosable?`data-key="${nk}"`:''}/>`;
+        }
+        // コマ全体のアニメーションもずらす
+        nodesSvg += `<g class="piece-group${frP>0?' frustrated':''}${isChoosable?' choosable':''}" ${isChoosable?`data-key="${nk}"`:''} style="${frP>0 ? animDelay : ''}">`;
+        nodesSvg += `<circle class="piece" cx="${p.x}" cy="${p.y}" r="${radius}" fill="${fill}" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>`;
+        nodesSvg += faceSvg(p.x, p.y, radius, color, frP);
+        nodesSvg += `</g>`;
+      }
+    }
+
+    const {b,w} = pieceCounts(game);
+    const total = keys.length;
+    const bPct = total ? (b/total*100) : 0;
+    const wPct = total ? (w/total*100) : 0;
+
+    let statusHtml;
+    let winnerOverlayHtml = '';
+    if(game.over){
+      let msg, cls;
+      let myC = null;
+      
+      if(appMode === 'cpu') myC = humanColor;
+      if(appMode === 'online') myC = myColor;
+
+      if(b > w){ 
+        msg = myC === 'B' ? 'You Win!' : (myC === 'W' ? 'You Lose...' : 'Black Wins!');
+        cls = 'win-b'; 
+      }
+      else if(w > b){ 
+        msg = myC === 'W' ? 'You Win!' : (myC === 'B' ? 'You Lose...' : 'White Wins!');
+        cls = 'win-w'; 
+      }
+      else { 
+        msg = 'Draw!'; 
+        cls = 'win-draw'; 
+      }
+      
+      statusHtml = `<div class="fo-hint">対局が終了しました。</div>`;
+      winnerOverlayHtml = `
+        <div class="fo-winner-overlay">
+          <div class="fo-winner-label">対局終了</div>
+          <div class="fo-winner-big ${cls}">${msg}</div>
+          <div class="fo-winner-score">● 黒 ${b} ー ○ 白 ${w}</div>
+          <button class="fo-btn primary" id="fo-play-again">${appMode==='online' ? 'モード選択に戻る' : 'もう一度遊ぶ'}</button>
+        </div>`;
+    } else if(game.phase==='flip'){
+      const canAct = interactive;
+      statusHtml = `<div class="fo-turn-row">
+          <span class="fo-dot" style="background:${game.turn==='B' ? 'var(--black-piece)' : 'var(--white-piece)'}"></span>
+          ${game.turn==='B' ? '黒' : '白'}の番
+        </div>
+        <div class="fo-hint">${canAct ? '金色に光るコマを1つ選んで反転させてください。' : (appMode==='cpu' ? 'ロボットが考え中です…' : '相手の反転を待っています…')}</div>`;
+    } else {
+      const canAct = interactive;
+      statusHtml = `<div class="fo-turn-row">
+          <span class="fo-dot" style="background:${game.turn==='B' ? 'var(--black-piece)' : 'var(--white-piece)'}"></span>
+          ${game.turn==='B' ? '黒' : '白'}の番です
+        </div>
+        <div class="fo-hint">${canAct ? '空いている場所をクリックしてコマを置いてください。' : (appMode==='cpu' ? 'ロボットが考え中です…' : '相手の手を待っています…')}</div>`;
+    }
+
+    let youBadge = '';
+    if(appMode==='cpu') youBadge = `<span class="fo-badge">あなた: ${humanColor==='B'?'● 黒':'○ 白'} / ロボット: ${humanColor==='B'?'○ 白':'● 黒'}</span>`;
+    else if(appMode==='online') youBadge = `<span class="fo-badge">あなた: ${myColor==='B'?'● 黒':'○ 白'} ・部屋 ${onlineCode}</span>`;
+    else youBadge = `<span class="fo-badge">ローカル対戦(2人)</span>`;
+
+    root.innerHTML = `
+      <div class="fo-header">
+        <p class="fo-title">フラストレーションオセロ</p>
+        <button class="fo-back" id="fo-back">${appMode==='online' ? '× 退出する' : '← モード選択に戻る'}</button>
+      </div>
+      <div style="margin-bottom:10px;">${youBadge}</div>
+      <div class="fo-layout">
+        <div class="fo-board-wrap">
+          <svg id="fo-svg" viewBox="${minX} ${minY} ${boardW} ${boardH}"></svg>
+          ${winnerOverlayHtml}
+        </div>
+        <div class="fo-side">
+          <div class="fo-card">
+            <h3>状況</h3>
+            ${statusHtml}
+          </div>
+          <div class="fo-card">
+            <h3>スコア</h3>
+            <div class="fo-score-row"><span>● 黒</span><span>${b}</span></div>
+            <div class="fo-score-row"><span>○ 白</span><span>${w}</span></div>
+            <div class="fo-score-bar">
+              <div style="width:${bPct}%; background:var(--black-piece-hi);"></div>
+              <div style="width:${wPct}%; background:var(--white-piece-hi);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const svg = document.getElementById('fo-svg');
+    svg.innerHTML = edgesSvg + nodesSvg;
+    svg.querySelectorAll('.node-empty').forEach(el => {
+      el.addEventListener('click', () => handlePlaceClick(el.getAttribute('data-key')));
+    });
+    svg.querySelectorAll('[data-key].choosable').forEach(el => {
+      el.addEventListener('click', () => handleFlipClick(el.getAttribute('data-key')));
+    });
+    document.getElementById('fo-back').addEventListener('click', goMenu);
+
+    const againBtn = document.getElementById('fo-play-again');
+    if(againBtn){
+      againBtn.addEventListener('click', () => {
+        if(appMode==='local') startLocal(game.R);
+        else if(appMode==='cpu') startCpu(game.R, humanColor);
+        else goMenu();
+      });
+    }
+  }
+
+  function render(){
+    if(screen==='menu') renderMenu();
+    else if(screen==='waiting') renderWaiting();
+    else if(screen==='game') renderGame();
+  }
+
+  render();
+})();
+</script>
