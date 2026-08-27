@@ -98,16 +98,6 @@
 .fo-winner-score { font-size: 15px; color: var(--text-dim); }
 .fo-winner-overlay .fo-btn { width: auto; padding: 10px 22px; margin-top: 6px; }
 
-/* waiting screen */
-.fo-waiting-wrap { text-align: center; padding: 30px 10px; }
-.fo-code-display {
-  font-size: 34px; font-weight: 800; letter-spacing: 0.25em; color: var(--amber);
-  background: #0e0f13; border: 1px dashed var(--panel-line); border-radius: 10px;
-  padding: 14px 10px; margin: 14px auto; max-width: 260px;
-}
-.fo-spinner { width: 22px; height: 22px; border: 3px solid var(--panel-line); border-top-color: var(--teal); border-radius: 50%; margin: 14px auto; animation: fo-spin 0.9s linear infinite; }
-@keyframes fo-spin { to { transform: rotate(360deg); } }
-
 /* toast */
 .fo-toast {
   position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
@@ -116,6 +106,20 @@
   opacity: 0; transition: opacity 0.25s ease; pointer-events: none; z-index: 20; white-space: nowrap;
 }
 .fo-toast.show { opacity: 1; }
+
+/* tutorial */
+.fo-tutorial-wrap { max-width: 420px; margin: 0 auto; text-align: center; }
+.fo-tutorial-board { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+.fo-tutorial-board svg { display: block; width: 100%; height: auto; max-height: 240px; }
+.fo-tutorial-title { font-size: 17px; margin: 0 0 8px 0; }
+.fo-tutorial-text { font-size: 13px; color: var(--text-dim); line-height: 1.7; margin: 0 0 16px 0; min-height: 3.4em; }
+.fo-tutorial-dots { display: flex; justify-content: center; gap: 6px; margin-bottom: 16px; }
+.fo-tutorial-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--panel-line); }
+.fo-tutorial-dot.active { background: var(--teal); }
+.fo-tutorial-nav { display: flex; gap: 10px; }
+.fo-tutorial-nav .fo-btn { width: auto; flex: 1; padding: 10px 16px; }
+.fo-tutorial-nav .fo-btn.ghost { color: var(--text-dim); }
+.fo-tutorial-nav .fo-btn.ghost:disabled { opacity: 0.35; cursor: default; }
 
 svg { display: block; width: 100%; height: auto; }
 .node-empty { fill: #0e0f13; stroke: #33384a; stroke-width: 1.2; cursor: pointer; }
@@ -143,11 +147,22 @@ svg { display: block; width: 100%; height: auto; }
 }
 .edge { stroke: #262a35; stroke-width: 1.5; }
 .face-line { stroke-linecap: round; fill: none; }
+
+@media (max-width: 520px) {
+  #app { padding: 14px; border-radius: 0; }
+  .fo-title { font-size: 18px; }
+  .fo-header { margin-bottom: 10px; }
+  .fo-layout { gap: 12px; }
+  .fo-board-wrap { flex-basis: 100%; padding: 6px; }
+  .fo-side { flex-basis: 100%; min-width: 0; }
+  .fo-menu-grid { grid-template-columns: 1fr; }
+  .fo-winner-big { font-size: 30px; }
+  .fo-mode-card { padding: 14px; }
+}
 </style>
 <script>
 (function () {
   const root = document.getElementById('app');
-  const myClientId = 'p_' + Math.random().toString(36).slice(2, 10);
 
   // ---------- pure game logic (works on a plain, JSON-serializable state object) ----------
   const DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]];
@@ -168,7 +183,7 @@ svg { display: block; width: 100%; height: auto; }
   function createGameState(R){
     const nodes = {};
     for(const k of allKeys(R)) nodes[k] = null;
-    return { R, nodes, turn: 'B', phase: 'place', pendingFrustrated: [], over: false, seq: 0, players: null };
+    return { R, nodes, turn: 'B', phase: 'place', pendingFrustrated: [], over: false, seq: 0 };
   }
 
   function buildEdges(R){
@@ -287,24 +302,110 @@ svg { display: block; width: 100%; height: auto; }
       let val;
       if(s2.phase==='flip') val = cpuBestFlip(s2, cpuColor).val;
       else { const {b,w} = pieceCounts(s2); val = cpuColor==='B' ? (b-w) : (w-b); }
-      val += Math.random()*0.01; // avoid fully robotic ties
+      val += Math.random()*0.01;
       if(val > bestVal){ bestVal = val; best = nk; }
     }
     return best;
   }
 
+  // ---------- tutorial (実際に操作しながら進む・CPU対戦) ----------
+  let tutorialGame = null;
+  const tutorialHumanColor = 'B';
+
+  function initTutorialGame(){
+    tutorialGame = createGameState(1); // 7ノードの小さな盤面
+  }
+
+  function tutorialCanInteract(){
+    return !!tutorialGame && !tutorialGame.over && tutorialGame.turn===tutorialHumanColor;
+  }
+
+  function tutorialMessage(){
+    if(tutorialGame.over){
+      return { title: '勝敗', text: '盤面が全部埋まりました。コマの数が多い方の勝ちです。これで基本ルールはおしまいです!' };
+    }
+    if(tutorialGame.phase==='flip'){
+      if(tutorialGame.turn===tutorialHumanColor){
+        return { title: 'フラストレーション', text: '同じ色のコマが隣り合うと、フラストレーションを感じて震え出します。金色に光っているコマを1つクリックして反転させてみましょう。' };
+      }
+      return { title: 'フラストレーション', text: 'CPU側にもフラストレーションが起きました。CPUがどちらを反転させるか考えています…' };
+    }
+    const anyPlaced = Object.values(tutorialGame.nodes).some(c => c);
+    if(!anyPlaced){
+      return { title: 'コマを置く', text: '空いている場所をクリックしてコマを置いてみましょう。あなたは黒、CPUは白です。交互に手番が進みます。' };
+    }
+    if(tutorialGame.turn!==tutorialHumanColor){
+      return { title: 'コマを置く', text: 'CPUが考えています…' };
+    }
+    return { title: 'コマを置く', text: 'そのまま置き続けてみましょう。同じ色が隣り合うと何が起きるか見てみましょう。' };
+  }
+
+  function tutorialStageIndex(){
+    if(tutorialGame.over) return 2;
+    if(tutorialGame.phase==='flip') return 1;
+    return 0;
+  }
+
+  function tutorialAfterMove(){
+    render();
+    scheduleTutorialCpuIfNeeded();
+  }
+
+  function tutorialPlace(nk){
+    if(!tutorialCanInteract() || tutorialGame.phase!=='place') return;
+    if(!applyPlace(tutorialGame, nk)) return;
+    tutorialAfterMove();
+  }
+
+  function tutorialFlip(nk){
+    if(!tutorialCanInteract() || tutorialGame.phase!=='flip') return;
+    if(!applyFlip(tutorialGame, nk)) return;
+    tutorialAfterMove();
+  }
+
+  function scheduleTutorialCpuIfNeeded(){
+    if(!tutorialGame || tutorialGame.over) return;
+    const cpuColor = tutorialHumanColor==='B' ? 'W' : 'B';
+    if(tutorialGame.turn !== cpuColor) return;
+    setTimeout(() => {
+      if(!tutorialGame || tutorialGame.over || screen!=='tutorial') return;
+      if(tutorialGame.phase==='place'){
+        const nk = cpuChoosePlacement(tutorialGame, cpuColor);
+        if(nk) applyPlace(tutorialGame, nk);
+      } else if(tutorialGame.phase==='flip'){
+        const { choice } = cpuBestFlip(tutorialGame, cpuColor);
+        applyFlip(tutorialGame, choice);
+      }
+      render();
+      scheduleTutorialCpuIfNeeded();
+    }, 550);
+  }
+
+  function tutorialRetry(){
+    initTutorialGame();
+    render();
+  }
+
+  async function markTutorialSeen(){
+    try{ await window.storage.set('tutorialSeen', 'true', false); }
+    catch(e){ /* 保存できなくても続行 */ }
+  }
+
+  function finishTutorial(){
+    markTutorialSeen();
+    screen = 'menu';
+    render();
+  }
+
+
+
   // ---------- app state ----------
-  let screen = 'menu'; // 'menu' | 'waiting' | 'game'
-  let appMode = null;  // 'local' | 'cpu' | 'online'
+  let screen = 'menu'; // 'tutorial' | 'menu' | 'game'
+  let appMode = null;  // 'local' | 'cpu'
   let game = null;
-  let humanColor = null; // for cpu mode: which color the human plays
-  let onlineTab = 'create'; // 'create' | 'join'
-  let onlineCode = null;
-  let myColor = null; // for online mode
-  let pollTimer = null;
-  let lastSeq = -1;
+  let humanColor = null;
   let toastTimer = null;
-  const uiPrefs = { radiusLocal: 2, radiusCpu: 2, cpuColorChoice: 'B', radiusOnline: 2, joinCode: '' };
+  const uiPrefs = { radiusLocal: 2, radiusCpu: 2, cpuColorChoice: 'B' };
 
   function showToast(msg){
     let el = root.querySelector('.fo-toast');
@@ -319,11 +420,8 @@ svg { display: block; width: 100%; height: auto; }
     toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
   }
 
-  function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer = null; } }
-
   function goMenu(){
-    stopPolling();
-    appMode = null; game = null; humanColor = null; onlineCode = null; myColor = null; lastSeq = -1;
+    appMode = null; game = null; humanColor = null;
     screen = 'menu';
     render();
   }
@@ -333,12 +431,10 @@ svg { display: block; width: 100%; height: auto; }
     if(!game || game.over) return false;
     if(appMode==='local') return true;
     if(appMode==='cpu') return game.turn===humanColor;
-    if(appMode==='online') return game.turn===myColor;
     return false;
   }
 
-  function afterMove(frustratedBefore){
-    if(appMode==='online') pushOnlineState();
+  function afterMove(){
     render();
     if(appMode==='cpu') scheduleCpuIfNeeded();
   }
@@ -381,77 +477,6 @@ svg { display: block; width: 100%; height: auto; }
     }, 600);
   }
 
-  // ---------- online ----------
-  async function createRoom(R){
-    const code = String(Math.floor(1000 + Math.random()*9000));
-    const st = createGameState(R);
-    st.players = { B: myClientId, W: null };
-    try{
-      const res = await window.storage.set('room:'+code, JSON.stringify(st), true);
-      if(!res){ showToast('部屋の作成に失敗しました'); return; }
-      onlineCode = code; myColor = 'B'; game = st; lastSeq = st.seq;
-      appMode = 'online'; screen = 'waiting';
-      render();
-      startPolling();
-    }catch(e){ showToast('部屋の作成に失敗しました'); }
-  }
-
-  async function joinRoom(codeRaw){
-    const code = (codeRaw||'').trim();
-    if(!code){ showToast('部屋番号を入力してください'); return; }
-    try{
-      const res = await window.storage.get('room:'+code, true);
-      if(!res){ showToast('部屋が見つかりません'); return; }
-      const st = JSON.parse(res.value);
-      if(!st.players) st.players = { B: null, W: null };
-      if(st.players.W && st.players.W !== myClientId){ showToast('この部屋は満室です'); return; }
-      st.players.W = myClientId;
-      st.seq = (st.seq||0) + 1;
-      const res2 = await window.storage.set('room:'+code, JSON.stringify(st), true);
-      if(!res2){ showToast('参加に失敗しました'); return; }
-      onlineCode = code; myColor = 'W'; game = st; lastSeq = st.seq;
-      appMode = 'online';
-      screen = (st.players.B && st.players.W) ? 'game' : 'waiting';
-      render();
-      startPolling();
-    }catch(e){ showToast('参加に失敗しました。番号を確認してください'); }
-  }
-
-  function startPolling(){
-    stopPolling();
-    pollTimer = setInterval(pollRoom, 1200);
-  }
-
-  async function pollRoom(){
-    if(!onlineCode) return;
-    try{
-      const res = await window.storage.get('room:'+onlineCode, true);
-      if(!res) return;
-      const st = JSON.parse(res.value);
-      if((st.seq||0) !== lastSeq){
-        const wasFlip = game && game.phase==='flip';
-        game = st; lastSeq = st.seq;
-        if(screen==='waiting' && st.players && st.players.B && st.players.W){
-          showToast('相手が参加しました!');
-          screen = 'game';
-        }
-        if(screen==='game' && game.phase==='flip' && !wasFlip && game.turn!==myColor){
-          showToast('相手にフラストレーションが発生しました');
-        }
-        if(game.over) showToast('対局終了!');
-        render();
-      }
-    }catch(e){ /* 通信エラーは静かに無視し、次のポーリングで再試行 */ }
-  }
-
-  async function pushOnlineState(){
-    if(!onlineCode || !game) return;
-    try{
-      const res = await window.storage.set('room:'+onlineCode, JSON.stringify(game), true);
-      if(res) lastSeq = game.seq;
-    }catch(e){ showToast('同期に失敗しました。通信をご確認ください'); }
-  }
-
   // ---------- start helpers ----------
   function startLocal(R){
     appMode = 'local'; humanColor = null;
@@ -489,20 +514,107 @@ svg { display: block; width: 100%; height: auto; }
     `;
   }
 
-  function rulesHtml(){
-    return `<details class="fo-rules">
-      <summary>遊び方を見る</summary>
-      <p>三角格子のノードに、交互にコマを置いていきます。</p>
-      <p>置いたことで盤面上に「同じ色が隣り合うコマ(フラストレーション)」ができると、そのコマが金色に光り、震え出します。このとき、光っているコマの中から1つを選んで色を反転させることができます。</p>
-      <p>盤面が全て埋まったら終了。コマの数が多い方の勝ちです。</p>
-    </details>`;
+  // ---------- screen: tutorial ----------
+  function renderTutorial(){
+    if(!tutorialGame) initTutorialGame();
+    const size = 46;
+    const R = 1;
+    const edges = buildEdges(R);
+    const keys = Object.keys(tutorialGame.nodes);
+    const pts = keys.map(k => pixelOf(size, k));
+    const pad = size*0.9;
+    const minX = Math.min(...pts.map(p=>p.x)) - pad;
+    const maxX = Math.max(...pts.map(p=>p.x)) + pad;
+    const minY = Math.min(...pts.map(p=>p.y)) - pad;
+    const maxY = Math.max(...pts.map(p=>p.y)) + pad;
+    const w = maxX-minX, h = maxY-minY;
+
+    let edgesSvg = '';
+    for(const [a,b] of edges){
+      const pa = pixelOf(size, a), pb = pixelOf(size, b);
+      edgesSvg += `<line class="edge" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}"/>`;
+    }
+
+    const radius = size*0.4;
+    const interactive = tutorialCanInteract();
+    const choosable = new Set(tutorialGame.phase==='flip' && interactive ? tutorialGame.pendingFrustrated : []);
+    let nodesSvg = '';
+    for(const nk of keys){
+      const p = pixelOf(size, nk);
+      const color = tutorialGame.nodes[nk];
+      if(!color){
+        const clickable = interactive && tutorialGame.phase==='place' && !tutorialGame.over;
+        nodesSvg += `<circle class="node-empty" cx="${p.x}" cy="${p.y}" r="${radius*0.55}" data-key="${nk}" style="${clickable?'':'pointer-events:none;opacity:0.4;'}"/>`;
+      } else {
+        const {p: frP} = frustrationOf(tutorialGame, nk);
+        const fill = color==='B' ? 'var(--black-piece)' : 'var(--white-piece)';
+        const isChoosable = choosable.has(nk);
+
+        const {q, r} = parseKey(nk);
+        const delayVal = (Math.abs(q * 17 + r * 23) % 100) / 100 * -1.0;
+        const animDelay = `animation-delay: ${delayVal.toFixed(2)}s;`;
+
+        if(frP>0){
+          const ringClass = 'frustrated-ring frustrated' + (isChoosable ? ' choosable' : '');
+          nodesSvg += `<circle class="${ringClass}" cx="${p.x}" cy="${p.y}" r="${radius+3}" style="stroke-opacity:${0.35+0.65*Math.min(frP,1)}; ${animDelay}" ${isChoosable?`data-key="${nk}"`:''}/>`;
+        }
+        nodesSvg += `<g class="piece-group${frP>0?' frustrated':''}${isChoosable?' choosable':''}" ${isChoosable?`data-key="${nk}"`:''} style="${frP>0 ? animDelay : ''}">`;
+        nodesSvg += `<circle class="piece" cx="${p.x}" cy="${p.y}" r="${radius}" fill="${fill}" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>`;
+        nodesSvg += faceSvg(p.x, p.y, radius, color, frP);
+        nodesSvg += `</g>`;
+      }
+    }
+
+    const msg = tutorialMessage();
+    const stageIdx = tutorialStageIndex();
+    const dots = [0,1,2].map(i=>`<span class="fo-tutorial-dot${i===stageIdx?' active':''}"></span>`).join('');
+
+    let navHtml;
+    if(tutorialGame.over){
+      navHtml = `<div class="fo-tutorial-nav">
+          <button class="fo-btn ghost" id="fo-tutorial-retry">もう一度練習する</button>
+          <button class="fo-btn primary" id="fo-tutorial-done">はじめる</button>
+        </div>`;
+    } else {
+      navHtml = `<p class="fo-hint">実際に盤面を操作しながら進みます</p>`;
+    }
+
+    root.innerHTML = `
+      <div class="fo-header">
+        <p class="fo-title">フラストレーションオセロ</p>
+        <button class="fo-back" id="fo-tutorial-skip">スキップ</button>
+      </div>
+      <div class="fo-tutorial-wrap">
+        <div style="margin-bottom:8px;"><span class="fo-badge">あなた: ● 黒 / CPU: ○ 白</span></div>
+        <div class="fo-tutorial-board">
+          <svg id="fo-tutorial-svg" viewBox="${minX} ${minY} ${w} ${h}">${edgesSvg + nodesSvg}</svg>
+        </div>
+        <h3 class="fo-tutorial-title">${msg.title}</h3>
+        <p class="fo-tutorial-text">${msg.text}</p>
+        <div class="fo-tutorial-dots">${dots}</div>
+        ${navHtml}
+      </div>
+    `;
+
+    document.getElementById('fo-tutorial-skip').addEventListener('click', finishTutorial);
+    const svg = document.getElementById('fo-tutorial-svg');
+    svg.querySelectorAll('.node-empty').forEach(el => {
+      el.addEventListener('click', () => tutorialPlace(el.getAttribute('data-key')));
+    });
+    svg.querySelectorAll('[data-key].choosable').forEach(el => {
+      el.addEventListener('click', () => tutorialFlip(el.getAttribute('data-key')));
+    });
+    const retryBtn = document.getElementById('fo-tutorial-retry');
+    if(retryBtn) retryBtn.addEventListener('click', tutorialRetry);
+    const doneBtn = document.getElementById('fo-tutorial-done');
+    if(doneBtn) doneBtn.addEventListener('click', finishTutorial);
   }
 
   // ---------- screen: menu ----------
   function renderMenu(){
     root.innerHTML = `
       <div class="fo-header"><p class="fo-title">フラストレーションオセロ</p></div>
-      ${rulesHtml()}
+      <button class="fo-btn ghost" id="fo-open-tutorial" style="width:auto;padding:6px 14px;margin-bottom:14px;">▶ 遊び方をアニメーションで見る</button>
       <div class="fo-menu-grid">
         <div class="fo-mode-card">
           <h3>ローカル対戦</h3>
@@ -538,32 +650,10 @@ svg { display: block; width: 100%; height: auto; }
           </div>
           <button class="fo-btn primary" id="fo-start-cpu">対局を始める</button>
         </div>
-
-        <div class="fo-mode-card">
-          <h3>オンライン対戦</h3>
-          <p class="desc">2人でネット越しに対戦します。部屋番号を共有してください。</p>
-          <div class="fo-tab-row">
-            <button class="fo-tab-btn ${onlineTab==='create'?'active':''}" id="fo-tab-create">部屋を作る</button>
-            <button class="fo-tab-btn ${onlineTab==='join'?'active':''}" id="fo-tab-join">部屋に入る</button>
-          </div>
-          ${onlineTab==='create' ? `
-            <div class="fo-field-row">
-              <span>盤の大きさ</span>
-              <select class="fo-select" id="fo-online-radius" style="margin-top:0;width:auto;">
-                <option value="1" ${uiPrefs.radiusOnline===1?'selected':''}>7ノード</option>
-                <option value="2" ${uiPrefs.radiusOnline===2?'selected':''}>19ノード</option>
-                <option value="3" ${uiPrefs.radiusOnline===3?'selected':''}>37ノード</option>
-              </select>
-            </div>
-            <button class="fo-btn primary" id="fo-create-room">部屋を作成(あなたは黒)</button>
-          ` : `
-            <input class="fo-code-input" id="fo-join-code" maxlength="4" placeholder="0000" value="${uiPrefs.joinCode}"/>
-            <button class="fo-btn primary" id="fo-join-room">参加する(あなたは白)</button>
-          `}
-          <p class="fo-hint">※盤面データは部屋番号を知っている人同士で共有されます。</p>
-        </div>
       </div>
     `;
+
+    root.querySelector('#fo-open-tutorial').addEventListener('click', () => { initTutorialGame(); screen='tutorial'; render(); });
 
     root.querySelector('#fo-local-radius').addEventListener('change', e => { uiPrefs.radiusLocal = parseInt(e.target.value,10); });
     root.querySelector('#fo-start-local').addEventListener('click', () => startLocal(uiPrefs.radiusLocal));
@@ -571,35 +661,6 @@ svg { display: block; width: 100%; height: auto; }
     root.querySelector('#fo-cpu-color').addEventListener('change', e => { uiPrefs.cpuColorChoice = e.target.value; });
     root.querySelector('#fo-cpu-radius').addEventListener('change', e => { uiPrefs.radiusCpu = parseInt(e.target.value,10); });
     root.querySelector('#fo-start-cpu').addEventListener('click', () => startCpu(uiPrefs.radiusCpu, uiPrefs.cpuColorChoice));
-
-    root.querySelector('#fo-tab-create').addEventListener('click', () => { onlineTab='create'; render(); });
-    root.querySelector('#fo-tab-join').addEventListener('click', () => { onlineTab='join'; render(); });
-    if(onlineTab==='create'){
-      root.querySelector('#fo-online-radius').addEventListener('change', e => { uiPrefs.radiusOnline = parseInt(e.target.value,10); });
-      root.querySelector('#fo-create-room').addEventListener('click', () => createRoom(uiPrefs.radiusOnline));
-    } else {
-      const input = root.querySelector('#fo-join-code');
-      input.addEventListener('input', e => { uiPrefs.joinCode = e.target.value; });
-      root.querySelector('#fo-join-room').addEventListener('click', () => joinRoom(input.value));
-    }
-  }
-
-  // ---------- screen: waiting (online, before opponent joins) ----------
-  function renderWaiting(){
-    root.innerHTML = `
-      <div class="fo-header">
-        <p class="fo-title">フラストレーションオセロ</p>
-        <button class="fo-back" id="fo-leave">× やめる</button>
-      </div>
-      <div class="fo-mode-card fo-waiting-wrap" style="max-width:420px;margin:0 auto;">
-        <h3>対戦相手を待っています…</h3>
-        <p class="desc">この番号を相手に伝えてください</p>
-        <div class="fo-code-display">${onlineCode}</div>
-        <div class="fo-spinner"></div>
-        <p class="fo-hint">あなたは ● 黒 です。相手が参加すると自動的に対局が始まります。</p>
-      </div>
-    `;
-    root.querySelector('#fo-leave').addEventListener('click', goMenu);
   }
 
   // ---------- screen: game ----------
@@ -636,19 +697,15 @@ svg { display: block; width: 100%; height: auto; }
         const {p: frP} = frustrationOf(game, nk);
         const fill = color==='B' ? 'var(--black-piece)' : 'var(--white-piece)';
         const isChoosable = choosable.has(nk);
-        
-        // --- 座標(q,r)から一意なマイナスのアニメーション遅延時間を計算してバラバラにする ---
+
         const {q, r} = parseKey(nk);
-        // 位置によって 0秒 〜 -0.99秒 の遅延を作る
-        const delayVal = (Math.abs(q * 17 + r * 23) % 100) / 100 * -1.0; 
+        const delayVal = (Math.abs(q * 17 + r * 23) % 100) / 100 * -1.0;
         const animDelay = `animation-delay: ${delayVal.toFixed(2)}s;`;
 
         if(frP>0){
           const ringClass = 'frustrated-ring frustrated' + (isChoosable ? ' choosable' : '');
-          // リングのアニメーションもずらす
           nodesSvg += `<circle class="${ringClass}" cx="${p.x}" cy="${p.y}" r="${radius+3}" style="stroke-opacity:${0.35+0.65*Math.min(frP,1)}; ${animDelay}" ${isChoosable?`data-key="${nk}"`:''}/>`;
         }
-        // コマ全体のアニメーションもずらす
         nodesSvg += `<g class="piece-group${frP>0?' frustrated':''}${isChoosable?' choosable':''}" ${isChoosable?`data-key="${nk}"`:''} style="${frP>0 ? animDelay : ''}">`;
         nodesSvg += `<circle class="piece" cx="${p.x}" cy="${p.y}" r="${radius}" fill="${fill}" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>`;
         nodesSvg += faceSvg(p.x, p.y, radius, color, frP);
@@ -666,30 +723,28 @@ svg { display: block; width: 100%; height: auto; }
     if(game.over){
       let msg, cls;
       let myC = null;
-      
       if(appMode === 'cpu') myC = humanColor;
-      if(appMode === 'online') myC = myColor;
 
-      if(b > w){ 
+      if(b > w){
         msg = myC === 'B' ? 'You Win!' : (myC === 'W' ? 'You Lose...' : 'Black Wins!');
-        cls = 'win-b'; 
+        cls = 'win-b';
       }
-      else if(w > b){ 
+      else if(w > b){
         msg = myC === 'W' ? 'You Win!' : (myC === 'B' ? 'You Lose...' : 'White Wins!');
-        cls = 'win-w'; 
+        cls = 'win-w';
       }
-      else { 
-        msg = 'Draw!'; 
-        cls = 'win-draw'; 
+      else {
+        msg = 'Draw!';
+        cls = 'win-draw';
       }
-      
+
       statusHtml = `<div class="fo-hint">対局が終了しました。</div>`;
       winnerOverlayHtml = `
         <div class="fo-winner-overlay">
           <div class="fo-winner-label">対局終了</div>
           <div class="fo-winner-big ${cls}">${msg}</div>
           <div class="fo-winner-score">● 黒 ${b} ー ○ 白 ${w}</div>
-          <button class="fo-btn primary" id="fo-play-again">${appMode==='online' ? 'モード選択に戻る' : 'もう一度遊ぶ'}</button>
+          <button class="fo-btn primary" id="fo-play-again">もう一度遊ぶ</button>
         </div>`;
     } else if(game.phase==='flip'){
       const canAct = interactive;
@@ -697,25 +752,24 @@ svg { display: block; width: 100%; height: auto; }
           <span class="fo-dot" style="background:${game.turn==='B' ? 'var(--black-piece)' : 'var(--white-piece)'}"></span>
           ${game.turn==='B' ? '黒' : '白'}の番
         </div>
-        <div class="fo-hint">${canAct ? '金色に光るコマを1つ選んで反転させてください。' : (appMode==='cpu' ? 'ロボットが考え中です…' : '相手の反転を待っています…')}</div>`;
+        <div class="fo-hint">${canAct ? '金色に光るコマを1つ選んで反転させてください。' : 'ロボットが考え中です…'}</div>`;
     } else {
       const canAct = interactive;
       statusHtml = `<div class="fo-turn-row">
           <span class="fo-dot" style="background:${game.turn==='B' ? 'var(--black-piece)' : 'var(--white-piece)'}"></span>
           ${game.turn==='B' ? '黒' : '白'}の番です
         </div>
-        <div class="fo-hint">${canAct ? '空いている場所をクリックしてコマを置いてください。' : (appMode==='cpu' ? 'ロボットが考え中です…' : '相手の手を待っています…')}</div>`;
+        <div class="fo-hint">${canAct ? '空いている場所をクリックしてコマを置いてください。' : 'ロボットが考え中です…'}</div>`;
     }
 
     let youBadge = '';
     if(appMode==='cpu') youBadge = `<span class="fo-badge">あなた: ${humanColor==='B'?'● 黒':'○ 白'} / ロボット: ${humanColor==='B'?'○ 白':'● 黒'}</span>`;
-    else if(appMode==='online') youBadge = `<span class="fo-badge">あなた: ${myColor==='B'?'● 黒':'○ 白'} ・部屋 ${onlineCode}</span>`;
     else youBadge = `<span class="fo-badge">ローカル対戦(2人)</span>`;
 
     root.innerHTML = `
       <div class="fo-header">
         <p class="fo-title">フラストレーションオセロ</p>
-        <button class="fo-back" id="fo-back">${appMode==='online' ? '× 退出する' : '← モード選択に戻る'}</button>
+        <button class="fo-back" id="fo-back">← モード選択に戻る</button>
       </div>
       <div style="margin-bottom:10px;">${youBadge}</div>
       <div class="fo-layout">
@@ -762,11 +816,21 @@ svg { display: block; width: 100%; height: auto; }
   }
 
   function render(){
-    if(screen==='menu') renderMenu();
-    else if(screen==='waiting') renderWaiting();
+    if(screen==='tutorial') renderTutorial();
+    else if(screen==='menu') renderMenu();
     else if(screen==='game') renderGame();
   }
 
-  render();
+  async function init(){
+    let seen = false;
+    try{
+      const res = await window.storage.get('tutorialSeen', false);
+      seen = !!(res && res.value === 'true');
+    } catch(e){ seen = false; }
+    screen = seen ? 'menu' : 'tutorial';
+    render();
+  }
+
+  init();
 })();
 </script>
