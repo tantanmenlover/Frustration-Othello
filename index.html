@@ -1,6 +1,11 @@
-<div id="app"></div>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>フラストレーションオセロ</title>
 <style>
-#app {
+:root {
   --bg: #14161c;
   --panel: #1b1e26;
   --panel-line: #2a2e3a;
@@ -13,15 +18,31 @@
   --black-piece-hi: #4a4a52;
   --white-piece: #f2efe6;
   --white-piece-hi: #ffffff;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg);
+}
+body {
+  display: flex;
+  justify-content: center;
+}
+#app {
   background: var(--bg);
   color: var(--text);
   font-family: ui-sans-serif, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
-  padding: 24px;
-  border-radius: 12px;
-  max-width: 880px;
+  padding: 28px;
+  width: 100%;
+  max-width: 1200px;
+  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
   position: relative;
 }
+
 #app * { box-sizing: border-box; }
 .fo-header { margin-bottom: 16px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .fo-title { font-size: 22px; font-weight: 700; letter-spacing: 0.02em; margin: 0; }
@@ -149,7 +170,7 @@ svg { display: block; width: 100%; height: auto; }
 .face-line { stroke-linecap: round; fill: none; }
 
 @media (max-width: 520px) {
-  #app { padding: 14px; border-radius: 0; }
+  #app { padding: 14px 14px 28px; }
   .fo-title { font-size: 18px; }
   .fo-header { margin-bottom: 10px; }
   .fo-layout { gap: 12px; }
@@ -160,6 +181,9 @@ svg { display: block; width: 100%; height: auto; }
   .fo-mode-card { padding: 14px; }
 }
 </style>
+</head>
+<body>
+<div id="app"></div>
 <script>
 (function () {
   const root = document.getElementById('app');
@@ -337,7 +361,7 @@ svg { display: block; width: 100%; height: auto; }
     if(tutorialGame.turn!==tutorialHumanColor){
       return { title: 'コマを置く', text: 'CPUが考えています……' };
     }
-    return { title: 'コマを置く', text: 'そのまま置き続けてみましょう。同じ色が隣り合うと何が起きるかしら…？' };
+    return { title: 'コマを置く', text: 'そのまま置き続けてみましょう。同じ色が隣り合うとフラストレーションが起きます。' };
   }
 
   function tutorialStageIndex(){
@@ -614,7 +638,7 @@ svg { display: block; width: 100%; height: auto; }
   function renderMenu(){
     root.innerHTML = `
       <div class="fo-header"><p class="fo-title">フラストレーションオセロ</p></div>
-      <button class="fo-btn ghost" id="fo-open-tutorial" style="width:auto;padding:6px 14px;margin-bottom:14px;">▶ 遊び方をアニメーションで見る</button>
+      <button class="fo-btn ghost" id="fo-open-tutorial" style="width:auto;padding:6px 14px;margin-bottom:14px;">▶ 遊び方</button>
       <div class="fo-menu-grid">
         <div class="fo-mode-card">
           <h3>ローカル対戦</h3>
@@ -834,3 +858,5 @@ svg { display: block; width: 100%; height: auto; }
   init();
 })();
 </script>
+</body>
+</html>
