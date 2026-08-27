@@ -189,65 +189,162 @@ svg { display: block; width: 100%; height: auto; }
   const root = document.getElementById('app');
 
   // ---------- pure game logic (works on a plain, JSON-serializable state object) ----------
-  const DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]];
-  const key = (q,r) => q + ',' + r;
-  const parseKey = (k) => { const [q,r] = k.split(',').map(Number); return {q,r}; };
-
-  function allKeys(R){
-    const out = [];
-    for(let q=-R;q<=R;q++){
-      for(let r=-R;r<=R;r++){
-        const s = -q-r;
-        if(Math.max(Math.abs(q),Math.abs(r),Math.abs(s))<=R) out.push(key(q,r));
-      }
-    }
-    return out;
-  }
-
-  function createGameState(R){
-    const nodes = {};
-    for(const k of allKeys(R)) nodes[k] = null;
-    return { R, nodes, turn: 'B', phase: 'place', pendingFrustrated: [], over: false, seq: 0 };
-  }
-
-  function buildEdges(R){
-    const keys = allKeys(R);
-    const set = new Set(keys);
-    const seen = new Set();
-    const edges = [];
-    for(const k of keys){
-      const {q,r} = parseKey(k);
-      for(const [dq,dr] of DIRS){
-        const k2 = key(q+dq, r+dr);
-        if(set.has(k2)){
-          const a = k < k2 ? k : k2, b = k < k2 ? k2 : k;
-          const ek = a+'|'+b;
-          if(!seen.has(ek)){ seen.add(ek); edges.push([a,b]); }
+  // 格子（レジストリ）: それぞれの格子タイプは keys / neighbors / edges / pixelOf を生成する
+  // generate(R) を持つ。三角格子(triangular)とカゴメ格子(kagome)の2種類を用意し、
+  // 将来さらに格子を増やしたい場合はここに追加していけばよい。
+  const LATTICES = {
+    triangular: {
+      id: 'triangular',
+      label: '三角格子',
+      shortDesc: '最も基本的な幾何学的フラストレーション格子です。',
+      neighborCount: 6,
+      sizes: [
+        { R: 1, label: '7ノード' },
+        { R: 2, label: '19ノード' },
+        { R: 3, label: '37ノード' },
+        { R: 4, label: '61ノード' }
+      ],
+      generate(R){
+        const DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]];
+        const k = (q,r) => q + ',' + r;
+        const keys = [];
+        for(let q=-R;q<=R;q++){
+          for(let r=-R;r<=R;r++){
+            const s = -q-r;
+            if(Math.max(Math.abs(q),Math.abs(r),Math.abs(s))<=R) keys.push(k(q,r));
+          }
         }
+        const set = new Set(keys);
+        const neighbors = new Map();
+        const edges = [];
+        const seenEdge = new Set();
+        for(const kk of keys){
+          const [q,r] = kk.split(',').map(Number);
+          const nbrs = [];
+          for(const [dq,dr] of DIRS){
+            const k2 = k(q+dq, r+dr);
+            if(set.has(k2)){
+              nbrs.push(k2);
+              const a = kk < k2 ? kk : k2, b = kk < k2 ? k2 : kk;
+              const ek = a+'|'+b;
+              if(!seenEdge.has(ek)){ seenEdge.add(ek); edges.push([a,b]); }
+            }
+          }
+          neighbors.set(kk, nbrs);
+        }
+        return {
+          keys, neighbors, edges,
+          pixelOf(kk){
+            const [q,r] = kk.split(',').map(Number);
+            return { x: q + r/2, y: r*Math.sqrt(3)/2 };
+          }
+        };
+      }
+    },
+    kagome: {
+      id: 'kagome',
+      label: 'カゴメ格子',
+      shortDesc: '三角形が頂点だけを共有して並ぶ格子で、三角格子と並ぶ幾何学的フラストレーションの代表例です。',
+      neighborCount: 4,
+      sizes: [
+        { R: 1, label: '21ノード' },
+        { R: 2, label: '57ノード' },
+        { R: 3, label: '111ノード' }
+      ],
+      generate(R){
+        // カゴメ格子 = 三角形3つを基本セルとする副格子(0,1,2)を、
+        // 三角格子状に並べたセル座標(i,j)で敷き詰めたもの。
+        const cellKey = (i,j) => i+','+j;
+        const cells = [];
+        for(let i=-R;i<=R;i++){
+          for(let j=-R;j<=R;j++){
+            const kk = -i-j;
+            if(Math.max(Math.abs(i),Math.abs(j),Math.abs(kk))<=R) cells.push([i,j]);
+          }
+        }
+        const siteKey = (i,j,s) => i+','+j+','+s;
+        const keys = [];
+        for(const [i,j] of cells) for(let s=0;s<3;s++) keys.push(siteKey(i,j,s));
+        const keySet = new Set(keys);
+        // 各副格子ごとの隣接オフセット [di, dj, ds]（同じセル内の2つ＋隣接セルの2つ＝計4隣人）
+        const NBR_RULES = {
+          0: [[0,0,1],[0,0,2],[-1,0,1],[0,-1,2]],
+          1: [[0,0,0],[0,0,2],[1,0,0],[1,-1,2]],
+          2: [[0,0,0],[0,0,1],[0,1,0],[-1,1,1]]
+        };
+        const neighbors = new Map();
+        const edges = [];
+        const seenEdge = new Set();
+        for(const [i,j] of cells){
+          for(let s=0;s<3;s++){
+            const k0 = siteKey(i,j,s);
+            const nbrs = [];
+            for(const [di,dj,ds] of NBR_RULES[s]){
+              const k2 = siteKey(i+di, j+dj, ds);
+              if(keySet.has(k2)){
+                nbrs.push(k2);
+                const a = k0 < k2 ? k0 : k2, b = k0 < k2 ? k2 : k0;
+                const ek = a+'|'+b;
+                if(!seenEdge.has(ek)){ seenEdge.add(ek); edges.push([a,b]); }
+              }
+            }
+            neighbors.set(k0, nbrs);
+          }
+        }
+        const SQ3 = Math.sqrt(3);
+        const BASIS = [[0,0],[1,0],[0.5, SQ3/2]];
+        return {
+          keys, neighbors, edges,
+          pixelOf(kk){
+            const [i,j,s] = kk.split(',').map(Number);
+            const b = BASIS[s];
+            return { x: i*2 + j*1 + b[0], y: j*SQ3 + b[1] };
+          }
+        };
       }
     }
-    return edges;
+  };
+
+  // (latticeId, R) の組ごとに一度だけ盤面グラフを生成してキャッシュする。
+  // state 自体には lattice(id文字列) と R(数値) しか持たせないので、
+  // JSON.parse(JSON.stringify(state)) による複製（CPU探索用）も安全に行える。
+  const boardCache = new Map();
+  function getBoard(latticeId, R){
+    const ck = latticeId + '|' + R;
+    if(boardCache.has(ck)) return boardCache.get(ck);
+    const board = LATTICES[latticeId].generate(R);
+    boardCache.set(ck, board);
+    return board;
+  }
+
+  function keyHash(k){
+    let h = 0;
+    for(let i=0;i<k.length;i++) h = (h*31 + k.charCodeAt(i)) >>> 0;
+    return h;
+  }
+
+  function createGameState(latticeId, R){
+    const board = getBoard(latticeId, R);
+    const nodes = {};
+    for(const k of board.keys) nodes[k] = null;
+    return { R, lattice: latticeId, nodes, turn: 'B', phase: 'place', pendingFrustrated: [], over: false, seq: 0 };
   }
 
   function neighborsOf(state, nk){
-    const {q,r} = parseKey(nk);
-    const out = [];
-    for(const [dq,dr] of DIRS){
-      const k2 = key(q+dq, r+dr);
-      if(k2 in state.nodes) out.push(k2);
-    }
-    return out;
+    const board = getBoard(state.lattice, state.R);
+    return board.neighbors.get(nk) || [];
   }
 
   function frustrationOf(state, nk){
     const color = state.nodes[nk];
     if(!color) return {p:0, same:0, occ:0};
+    const idealN = LATTICES[state.lattice].neighborCount;
     let same=0, occ=0;
     for(const k2 of neighborsOf(state, nk)){
       const c2 = state.nodes[k2];
       if(c2){ occ++; if(c2===color) same++; }
     }
-    return {p: same/6, same, occ};
+    return {p: same/idealN, same, occ};
   }
 
   function getFrustratedNodes(state){
@@ -337,7 +434,7 @@ svg { display: block; width: 100%; height: auto; }
   const tutorialHumanColor = 'B';
 
   function initTutorialGame(){
-    tutorialGame = createGameState(1); // 7ノードの小さな盤面
+    tutorialGame = createGameState('triangular', 1); // 7ノードの小さな盤面（三角格子固定）
   }
 
   function tutorialCanInteract(){
@@ -429,7 +526,7 @@ svg { display: block; width: 100%; height: auto; }
   let game = null;
   let humanColor = null;
   let toastTimer = null;
-  const uiPrefs = { radiusLocal: 2, radiusCpu: 2, cpuColorChoice: 'B' };
+  const uiPrefs = { latticeLocal: 'triangular', radiusLocal: 2, latticeCpu: 'triangular', radiusCpu: 2, cpuColorChoice: 'B' };
 
   function showToast(msg){
     let el = root.querySelector('.fo-toast');
@@ -502,25 +599,25 @@ svg { display: block; width: 100%; height: auto; }
   }
 
   // ---------- start helpers ----------
-  function startLocal(R){
+  function startLocal(latticeId, R){
     appMode = 'local'; humanColor = null;
-    game = createGameState(R);
+    game = createGameState(latticeId, R);
     screen = 'game';
     render();
   }
 
-  function startCpu(R, playerColor){
+  function startCpu(latticeId, R, playerColor){
     appMode = 'cpu'; humanColor = playerColor;
-    game = createGameState(R);
+    game = createGameState(latticeId, R);
     screen = 'game';
     render();
     scheduleCpuIfNeeded();
   }
 
   // ---------- rendering helpers ----------
-  function pixelOf(size, nk){
-    const {q,r} = parseKey(nk);
-    return { x: size*(q + r/2), y: size*(r*Math.sqrt(3)/2) };
+  function scaledPixel(board, size, nk){
+    const p = board.pixelOf(nk);
+    return { x: size*p.x, y: size*p.y };
   }
 
   function faceSvg(cx, cy, radius, color, p){
@@ -542,10 +639,10 @@ svg { display: block; width: 100%; height: auto; }
   function renderTutorial(){
     if(!tutorialGame) initTutorialGame();
     const size = 46;
-    const R = 1;
-    const edges = buildEdges(R);
+    const board = getBoard(tutorialGame.lattice, tutorialGame.R);
+    const edges = board.edges;
     const keys = Object.keys(tutorialGame.nodes);
-    const pts = keys.map(k => pixelOf(size, k));
+    const pts = keys.map(k => scaledPixel(board, size, k));
     const pad = size*0.9;
     const minX = Math.min(...pts.map(p=>p.x)) - pad;
     const maxX = Math.max(...pts.map(p=>p.x)) + pad;
@@ -555,7 +652,7 @@ svg { display: block; width: 100%; height: auto; }
 
     let edgesSvg = '';
     for(const [a,b] of edges){
-      const pa = pixelOf(size, a), pb = pixelOf(size, b);
+      const pa = scaledPixel(board, size, a), pb = scaledPixel(board, size, b);
       edgesSvg += `<line class="edge" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}"/>`;
     }
 
@@ -564,7 +661,7 @@ svg { display: block; width: 100%; height: auto; }
     const choosable = new Set(tutorialGame.phase==='flip' && interactive ? tutorialGame.pendingFrustrated : []);
     let nodesSvg = '';
     for(const nk of keys){
-      const p = pixelOf(size, nk);
+      const p = scaledPixel(board, size, nk);
       const color = tutorialGame.nodes[nk];
       if(!color){
         const clickable = interactive && tutorialGame.phase==='place' && !tutorialGame.over;
@@ -574,8 +671,7 @@ svg { display: block; width: 100%; height: auto; }
         const fill = color==='B' ? 'var(--black-piece)' : 'var(--white-piece)';
         const isChoosable = choosable.has(nk);
 
-        const {q, r} = parseKey(nk);
-        const delayVal = (Math.abs(q * 17 + r * 23) % 100) / 100 * -1.0;
+        const delayVal = (keyHash(nk) % 100) / 100 * -1.0;
         const animDelay = `animation-delay: ${delayVal.toFixed(2)}s;`;
 
         if(frP>0){
@@ -633,6 +729,22 @@ svg { display: block; width: 100%; height: auto; }
   }
 
   // ---------- screen: menu ----------
+  function latticeOptionsHtml(selectedId){
+    return Object.values(LATTICES).map(L =>
+      `<option value="${L.id}" ${L.id===selectedId?'selected':''}>${L.label}</option>`
+    ).join('');
+  }
+  function sizeOptionsHtml(latticeId, selectedR){
+    return LATTICES[latticeId].sizes.map(sz =>
+      `<option value="${sz.R}" ${sz.R===selectedR?'selected':''}>${sz.label}</option>`
+    ).join('');
+  }
+  function pickDefaultR(latticeId, prevR){
+    const sizes = LATTICES[latticeId].sizes;
+    if(sizes.some(sz => sz.R===prevR)) return prevR;
+    return sizes[Math.min(1, sizes.length-1)].R;
+  }
+
   function renderMenu(){
     root.innerHTML = `
       <div class="fo-header"><p class="fo-title">フラストレーションオセロ</p></div>
@@ -642,12 +754,13 @@ svg { display: block; width: 100%; height: auto; }
           <h3>ローカル対戦</h3>
           <p class="desc">同じ画面で2人が交互にプレイします。</p>
           <div class="fo-field-row">
+            <span>格子の種類</span>
+            <select class="fo-select" id="fo-local-lattice" style="margin-top:0;width:auto;">${latticeOptionsHtml(uiPrefs.latticeLocal)}</select>
+          </div>
+          <p class="desc" id="fo-local-lattice-desc">${LATTICES[uiPrefs.latticeLocal].shortDesc}</p>
+          <div class="fo-field-row">
             <span>盤の大きさ</span>
-            <select class="fo-select" id="fo-local-radius" style="margin-top:0;width:auto;">
-              <option value="1" ${uiPrefs.radiusLocal===1?'selected':''}>7ノード</option>
-              <option value="2" ${uiPrefs.radiusLocal===2?'selected':''}>19ノード</option>
-              <option value="3" ${uiPrefs.radiusLocal===3?'selected':''}>37ノード</option>
-            </select>
+            <select class="fo-select" id="fo-local-radius" style="margin-top:0;width:auto;">${sizeOptionsHtml(uiPrefs.latticeLocal, uiPrefs.radiusLocal)}</select>
           </div>
           <button class="fo-btn primary" id="fo-start-local">対局を始める</button>
         </div>
@@ -663,12 +776,13 @@ svg { display: block; width: 100%; height: auto; }
             </select>
           </div>
           <div class="fo-field-row">
+            <span>格子の種類</span>
+            <select class="fo-select" id="fo-cpu-lattice" style="margin-top:0;width:auto;">${latticeOptionsHtml(uiPrefs.latticeCpu)}</select>
+          </div>
+          <p class="desc" id="fo-cpu-lattice-desc">${LATTICES[uiPrefs.latticeCpu].shortDesc}</p>
+          <div class="fo-field-row">
             <span>盤の大きさ</span>
-            <select class="fo-select" id="fo-cpu-radius" style="margin-top:0;width:auto;">
-              <option value="1" ${uiPrefs.radiusCpu===1?'selected':''}>7ノード</option>
-              <option value="2" ${uiPrefs.radiusCpu===2?'selected':''}>19ノード</option>
-              <option value="3" ${uiPrefs.radiusCpu===3?'selected':''}>37ノード</option>
-            </select>
+            <select class="fo-select" id="fo-cpu-radius" style="margin-top:0;width:auto;">${sizeOptionsHtml(uiPrefs.latticeCpu, uiPrefs.radiusCpu)}</select>
           </div>
           <button class="fo-btn primary" id="fo-start-cpu">対局を始める</button>
         </div>
@@ -677,21 +791,33 @@ svg { display: block; width: 100%; height: auto; }
 
     root.querySelector('#fo-open-tutorial').addEventListener('click', () => { initTutorialGame(); screen='tutorial'; render(); });
 
+    root.querySelector('#fo-local-lattice').addEventListener('change', e => {
+      uiPrefs.latticeLocal = e.target.value;
+      uiPrefs.radiusLocal = pickDefaultR(uiPrefs.latticeLocal, uiPrefs.radiusLocal);
+      root.querySelector('#fo-local-radius').innerHTML = sizeOptionsHtml(uiPrefs.latticeLocal, uiPrefs.radiusLocal);
+      root.querySelector('#fo-local-lattice-desc').textContent = LATTICES[uiPrefs.latticeLocal].shortDesc;
+    });
     root.querySelector('#fo-local-radius').addEventListener('change', e => { uiPrefs.radiusLocal = parseInt(e.target.value,10); });
-    root.querySelector('#fo-start-local').addEventListener('click', () => startLocal(uiPrefs.radiusLocal));
+    root.querySelector('#fo-start-local').addEventListener('click', () => startLocal(uiPrefs.latticeLocal, uiPrefs.radiusLocal));
 
     root.querySelector('#fo-cpu-color').addEventListener('change', e => { uiPrefs.cpuColorChoice = e.target.value; });
+    root.querySelector('#fo-cpu-lattice').addEventListener('change', e => {
+      uiPrefs.latticeCpu = e.target.value;
+      uiPrefs.radiusCpu = pickDefaultR(uiPrefs.latticeCpu, uiPrefs.radiusCpu);
+      root.querySelector('#fo-cpu-radius').innerHTML = sizeOptionsHtml(uiPrefs.latticeCpu, uiPrefs.radiusCpu);
+      root.querySelector('#fo-cpu-lattice-desc').textContent = LATTICES[uiPrefs.latticeCpu].shortDesc;
+    });
     root.querySelector('#fo-cpu-radius').addEventListener('change', e => { uiPrefs.radiusCpu = parseInt(e.target.value,10); });
-    root.querySelector('#fo-start-cpu').addEventListener('click', () => startCpu(uiPrefs.radiusCpu, uiPrefs.cpuColorChoice));
+    root.querySelector('#fo-start-cpu').addEventListener('click', () => startCpu(uiPrefs.latticeCpu, uiPrefs.radiusCpu, uiPrefs.cpuColorChoice));
   }
 
   // ---------- screen: game ----------
   function renderGame(){
     const size = 46;
-    const R = game.R;
-    const edges = buildEdges(R);
+    const board = getBoard(game.lattice, game.R);
+    const edges = board.edges;
     const keys = Object.keys(game.nodes);
-    const pts = keys.map(k => pixelOf(size, k));
+    const pts = keys.map(k => scaledPixel(board, size, k));
     const pad = size*0.9;
     const minX = Math.min(...pts.map(p=>p.x)) - pad;
     const maxX = Math.max(...pts.map(p=>p.x)) + pad;
@@ -701,7 +827,7 @@ svg { display: block; width: 100%; height: auto; }
 
     let edgesSvg = '';
     for(const [a,b] of edges){
-      const pa = pixelOf(size, a), pb = pixelOf(size, b);
+      const pa = scaledPixel(board, size, a), pb = scaledPixel(board, size, b);
       edgesSvg += `<line class="edge" x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}"/>`;
     }
 
@@ -710,7 +836,7 @@ svg { display: block; width: 100%; height: auto; }
     const choosable = new Set(game.phase==='flip' && interactive ? game.pendingFrustrated : []);
     let nodesSvg = '';
     for(const nk of keys){
-      const p = pixelOf(size, nk);
+      const p = scaledPixel(board, size, nk);
       const color = game.nodes[nk];
       if(!color){
         const clickable = interactive && game.phase==='place' && !game.over;
@@ -720,8 +846,7 @@ svg { display: block; width: 100%; height: auto; }
         const fill = color==='B' ? 'var(--black-piece)' : 'var(--white-piece)';
         const isChoosable = choosable.has(nk);
 
-        const {q, r} = parseKey(nk);
-        const delayVal = (Math.abs(q * 17 + r * 23) % 100) / 100 * -1.0;
+        const delayVal = (keyHash(nk) % 100) / 100 * -1.0;
         const animDelay = `animation-delay: ${delayVal.toFixed(2)}s;`;
 
         if(frP>0){
@@ -787,6 +912,7 @@ svg { display: block; width: 100%; height: auto; }
     let youBadge = '';
     if(appMode==='cpu') youBadge = `<span class="fo-badge">あなた: ${humanColor==='B'?'● 黒':'○ 白'} / ロボット: ${humanColor==='B'?'○ 白':'● 黒'}</span>`;
     else youBadge = `<span class="fo-badge">ローカル対戦(2人)</span>`;
+    youBadge += ` <span class="fo-badge">${LATTICES[game.lattice].label} ・ ${keys.length}ノード</span>`;
 
     root.innerHTML = `
       <div class="fo-header">
@@ -830,8 +956,8 @@ svg { display: block; width: 100%; height: auto; }
     const againBtn = document.getElementById('fo-play-again');
     if(againBtn){
       againBtn.addEventListener('click', () => {
-        if(appMode==='local') startLocal(game.R);
-        else if(appMode==='cpu') startCpu(game.R, humanColor);
+        if(appMode==='local') startLocal(game.lattice, game.R);
+        else if(appMode==='cpu') startCpu(game.lattice, game.R, humanColor);
         else goMenu();
       });
     }
