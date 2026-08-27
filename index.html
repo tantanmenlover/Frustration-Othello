@@ -82,11 +82,11 @@ body {
 .fo-board-wrap { position: relative; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; padding: 10px; flex: 1 1 420px; min-width: 300px; }
 .fo-side { flex: 0 0 220px; display: flex; flex-direction: column; gap: 12px; min-width: 200px; }
 .fo-card { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; padding: 12px 14px; }
-.fo-card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 0 0 8px 0; font-weight: 600; }
-.fo-turn-row { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
-.fo-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid rgba(255,255,255,0.25); }
-.fo-hint { font-size: 12px; color: var(--text-dim); margin-top: 4px; line-height: 1.6; }
-.fo-score-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 6px; }
+.fo-card h3 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 0 0 8px 0; font-weight: 600; }
+.fo-turn-row { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; }
+.fo-dot { width: 17px; height: 17px; border-radius: 50%; display: inline-block; border: 1px solid rgba(255,255,255,0.25); }
+.fo-hint { font-size: 14px; color: var(--text-dim); margin-top: 6px; line-height: 1.65; }
+.fo-score-row { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .fo-score-bar { height: 8px; border-radius: 4px; overflow: hidden; background: #0e0f13; display: flex; margin-top: 4px; }
 .fo-btn {
   background: #262a35; border: 1px solid var(--panel-line); color: var(--text);
@@ -593,14 +593,12 @@ svg { display: block; width: 100%; height: auto; }
     const stageIdx = tutorialStageIndex();
     const dots = [0,1,2].map(i=>`<span class="fo-tutorial-dot${i===stageIdx?' active':''}"></span>`).join('');
 
-    let navHtml;
+    let navHtml = '';
     if(tutorialGame.over){
       navHtml = `<div class="fo-tutorial-nav">
           <button class="fo-btn ghost" id="fo-tutorial-retry">もう一度練習する</button>
           <button class="fo-btn primary" id="fo-tutorial-done">はじめる</button>
         </div>`;
-    } else {
-      navHtml = `<p class="fo-hint">実際に盤面を操作しながら進みます</p>`;
     }
 
     root.innerHTML = `
@@ -638,7 +636,7 @@ svg { display: block; width: 100%; height: auto; }
   function renderMenu(){
     root.innerHTML = `
       <div class="fo-header"><p class="fo-title">フラストレーションオセロ</p></div>
-      <button class="fo-btn ghost" id="fo-open-tutorial" style="width:auto;padding:6px 14px;margin-bottom:14px;">▶ 遊び方</button>
+      <button class="fo-btn ghost" id="fo-open-tutorial" style="width:auto;padding:6px 14px;margin-bottom:14px;">▶︎ 遊び方</button>
       <div class="fo-menu-grid">
         <div class="fo-mode-card">
           <h3>ローカル対戦</h3>
