@@ -322,22 +322,22 @@ svg { display: block; width: 100%; height: auto; }
 
   function tutorialMessage(){
     if(tutorialGame.over){
-      return { title: '勝敗', text: '盤面が全部埋まりました。コマの数が多い方の勝ちです。これで基本ルールはおしまいです!' };
+      return { title: '対局終了！', text: '盤面が全部埋まりました。コマの数が多い方の勝ちです。これで基本ルールはおしまいです!' };
     }
     if(tutorialGame.phase==='flip'){
       if(tutorialGame.turn===tutorialHumanColor){
-        return { title: 'フラストレーション', text: '同じ色のコマが隣り合うと、フラストレーションを感じて震え出します。金色に光っているコマを1つクリックして反転させてみましょう。' };
+        return { title: 'フラストレーション！', text: 'コマたちは同じ色同士で隣り合うのを嫌がるので、フラストレーションを感じて震え出します。震えているコマを1つクリックして反転させてあげましょう。' };
       }
-      return { title: 'フラストレーション', text: 'CPU側にもフラストレーションが起きました。CPUがどちらを反転させるか考えています…' };
+      return { title: 'フラストレーション！', text: 'CPU側にもフラストレーションが起きました。CPUがどちらを反転させるか考えています。' };
     }
     const anyPlaced = Object.values(tutorialGame.nodes).some(c => c);
     if(!anyPlaced){
       return { title: 'コマを置く', text: '空いている場所をクリックしてコマを置いてみましょう。あなたは黒、CPUは白です。交互に手番が進みます。' };
     }
     if(tutorialGame.turn!==tutorialHumanColor){
-      return { title: 'コマを置く', text: 'CPUが考えています…' };
+      return { title: 'コマを置く', text: 'CPUが考えています……' };
     }
-    return { title: 'コマを置く', text: 'そのまま置き続けてみましょう。同じ色が隣り合うと何が起きるか見てみましょう。' };
+    return { title: 'コマを置く', text: 'そのまま置き続けてみましょう。同じ色が隣り合うと何が起きるかしら…？' };
   }
 
   function tutorialStageIndex(){
@@ -443,7 +443,7 @@ svg { display: block; width: 100%; height: auto; }
     if(!canInteract() || game.phase!=='place') return;
     const ok = applyPlace(game, nk);
     if(!ok) return;
-    if(game.phase==='flip') showToast('フラストレーション発生!金色のコマから1つ選んで反転できます');
+    if(game.phase==='flip') showToast('フラストレーション発生!震えているコマから1つ選んで反転できます');
     else if(game.over) showToast('対局終了!');
     afterMove();
   }
