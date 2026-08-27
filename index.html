@@ -151,10 +151,8 @@ svg { display: block; width: 100%; height: auto; }
 .piece-group.choosable { cursor: pointer; }
 .piece-group.choosable:hover .piece { filter: brightness(1.25); }
 
-.frustrated-ring { fill: none; stroke: var(--amber); stroke-width: 2; }
-.frustrated-ring.choosable { stroke-width: 3; cursor: pointer; }
+.frustrated-ring { fill: none; stroke: var(--amber); stroke-width: 3; cursor: pointer; }
 @keyframes fo-pulse { 0%,100% { stroke-opacity: 0.5; } 50% { stroke-opacity: 1; } }
-.frustrated-ring.choosable { animation: fo-pulse 1.1s ease-in-out infinite; }
 @keyframes fo-shake {
   0%, 100% { transform: translate(0,0); }
   20% { transform: translate(-0.7px, 0.5px); }
@@ -162,9 +160,13 @@ svg { display: block; width: 100%; height: auto; }
   60% { transform: translate(-0.5px, -0.5px); }
   80% { transform: translate(0.7px, 0.4px); }
 }
-.piece-group.frustrated, .frustrated-ring.frustrated {
+.piece-group.frustrated {
   transform-box: fill-box; transform-origin: center;
   animation: fo-shake 0.28s infinite;
+}
+.frustrated-ring {
+  transform-box: fill-box; transform-origin: center;
+  animation: fo-pulse 1.1s ease-in-out infinite, fo-shake 0.28s infinite;
 }
 .edge { stroke: #262a35; stroke-width: 1.5; }
 .face-line { stroke-linecap: round; fill: none; }
@@ -189,9 +191,6 @@ svg { display: block; width: 100%; height: auto; }
   const root = document.getElementById('app');
 
   // ---------- pure game logic (works on a plain, JSON-serializable state object) ----------
-  // 格子（レジストリ）: それぞれの格子タイプは keys / neighbors / edges / pixelOf を生成する
-  // generate(R) を持つ。三角格子(triangular)とカゴメ格子(kagome)の2種類を用意し、
-  // 将来さらに格子を増やしたい場合はここに追加していけばよい。
   const LATTICES = {
     triangular: {
       id: 'triangular',
@@ -252,8 +251,6 @@ svg { display: block; width: 100%; height: auto; }
         { R: 3, label: '111ノード' }
       ],
       generate(R){
-        // カゴメ格子 = 三角形3つを基本セルとする副格子(0,1,2)を、
-        // 三角格子状に並べたセル座標(i,j)で敷き詰めたもの。
         const cellKey = (i,j) => i+','+j;
         const cells = [];
         for(let i=-R;i<=R;i++){
@@ -266,7 +263,6 @@ svg { display: block; width: 100%; height: auto; }
         const keys = [];
         for(const [i,j] of cells) for(let s=0;s<3;s++) keys.push(siteKey(i,j,s));
         const keySet = new Set(keys);
-        // 各副格子ごとの隣接オフセット [di, dj, ds]（同じセル内の2つ＋隣接セルの2つ＝計4隣人）
         const NBR_RULES = {
           0: [[0,0,1],[0,0,2],[-1,0,1],[0,-1,2]],
           1: [[0,0,0],[0,0,2],[1,0,0],[1,-1,2]],
@@ -305,9 +301,6 @@ svg { display: block; width: 100%; height: auto; }
     }
   };
 
-  // (latticeId, R) の組ごとに一度だけ盤面グラフを生成してキャッシュする。
-  // state 自体には lattice(id文字列) と R(数値) しか持たせないので、
-  // JSON.parse(JSON.stringify(state)) による複製（CPU探索用）も安全に行える。
   const boardCache = new Map();
   function getBoard(latticeId, R){
     const ck = latticeId + '|' + R;
@@ -434,7 +427,7 @@ svg { display: block; width: 100%; height: auto; }
   const tutorialHumanColor = 'B';
 
   function initTutorialGame(){
-    tutorialGame = createGameState('triangular', 1); // 7ノードの小さな盤面（三角格子固定）
+    tutorialGame = createGameState('triangular', 1);
   }
 
   function tutorialCanInteract(){
@@ -443,13 +436,13 @@ svg { display: block; width: 100%; height: auto; }
 
   function tutorialMessage(){
     if(tutorialGame.over){
-      return { title: '対局終了！', text: '盤面が全部埋まりました。コマの数が多い方の勝ちです。これで基本ルールはおしまいです!' };
+      return { title: '対局終了!', text: '盤面が全部埋まりました。コマの数が多い方の勝ちです。これで基本ルールはおしまいです!' };
     }
     if(tutorialGame.phase==='flip'){
       if(tutorialGame.turn===tutorialHumanColor){
-        return { title: 'フラストレーション！', text: 'コマたちは同じ色同士で隣り合うのを嫌がるので、フラストレーションを感じて震え出します。震えているコマを1つクリックして反転させてあげましょう。' };
+        return { title: 'フラストレーション!', text: 'コマたちは同じ色同士で隣り合うのを嫌がるので、フラストレーションを感じて震え出します。黄色く光っているコマを1つクリックして反転させてあげましょう。反転できるのは、コマを置いた本人の番の間だけです。' };
       }
-      return { title: 'フラストレーション！', text: 'CPU側にもフラストレーションが起きました。CPUがどちらを反転させるか考えています。' };
+      return { title: 'フラストレーション!', text: 'CPU側にもフラストレーションが起きました。反転できるのはCPUの番の間だけなので、ここではCPUが選ぶ様子を見てみましょう。震えてはいますが、あなたの番ではないので光りません。' };
     }
     const anyPlaced = Object.values(tutorialGame.nodes).some(c => c);
     if(!anyPlaced){
@@ -458,7 +451,7 @@ svg { display: block; width: 100%; height: auto; }
     if(tutorialGame.turn!==tutorialHumanColor){
       return { title: 'コマを置く', text: 'CPUが考え中…' };
     }
-    return { title: 'コマを置く', text: 'そのまま置き続けてみましょう。同じ色が隣り合うとフラストレーションが起きます。ちなみに、フラストレートしたコマの反転は、白黒関わらずできます。' };
+    return { title: 'コマを置く', text: 'そのまま置き続けてみましょう。同じ色が隣り合うとフラストレーションが起きます。' };
   }
 
   function tutorialStageIndex(){
@@ -518,11 +511,9 @@ svg { display: block; width: 100%; height: auto; }
     render();
   }
 
-
-
   // ---------- app state ----------
-  let screen = 'menu'; // 'tutorial' | 'menu' | 'game'
-  let appMode = null;  // 'local' | 'cpu'
+  let screen = 'menu';
+  let appMode = null;
   let game = null;
   let humanColor = null;
   let toastTimer = null;
@@ -547,7 +538,6 @@ svg { display: block; width: 100%; height: auto; }
     render();
   }
 
-  // ---------- local / cpu move handlers ----------
   function canInteract(){
     if(!game || game.over) return false;
     if(appMode==='local') return true;
@@ -564,7 +554,7 @@ svg { display: block; width: 100%; height: auto; }
     if(!canInteract() || game.phase!=='place') return;
     const ok = applyPlace(game, nk);
     if(!ok) return;
-    if(game.phase==='flip') showToast('フラストレーション発生!震えているコマから1つ選んで反転できます');
+    if(game.phase==='flip') showToast('フラストレーション発生!黄色く光るコマから1つ選んで反転できます');
     else if(game.over) showToast('対局終了!');
     afterMove();
   }
@@ -598,7 +588,6 @@ svg { display: block; width: 100%; height: auto; }
     }, 600);
   }
 
-  // ---------- start helpers ----------
   function startLocal(latticeId, R){
     appMode = 'local'; humanColor = null;
     game = createGameState(latticeId, R);
@@ -614,7 +603,6 @@ svg { display: block; width: 100%; height: auto; }
     scheduleCpuIfNeeded();
   }
 
-  // ---------- rendering helpers ----------
   function scaledPixel(board, size, nk){
     const p = board.pixelOf(nk);
     return { x: size*p.x, y: size*p.y };
@@ -633,6 +621,21 @@ svg { display: block; width: 100%; height: auto; }
         <path class="face-line" d="${mouthPath}" stroke="${stroke}" stroke-width="${radius*0.09}"/>
       </g>
     `;
+  }
+
+  // 震えているコマのSVGを作る。isChoosable(=自分の番で選べる)の時だけ黄色いリングを付ける。
+  function renderPieceGroup(p, radius, color, frP, isChoosable, nk){
+    let svg = '';
+    const delayVal = (keyHash(nk) % 100) / 100 * -1.0;
+    const animDelay = `animation-delay: ${delayVal.toFixed(2)}s;`;
+    if(frP>0 && isChoosable){
+      svg += `<circle class="frustrated-ring frustrated" cx="${p.x}" cy="${p.y}" r="${radius+3}" style="${animDelay}" data-key="${nk}"/>`;
+    }
+    svg += `<g class="piece-group${frP>0?' frustrated':''}${isChoosable?' choosable':''}" ${isChoosable?`data-key="${nk}"`:''} style="${frP>0 ? animDelay : ''}">`;
+    svg += `<circle class="piece" cx="${p.x}" cy="${p.y}" r="${radius}" fill="${color==='B' ? 'var(--black-piece)' : 'var(--white-piece)'}" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>`;
+    svg += faceSvg(p.x, p.y, radius, color, frP);
+    svg += `</g>`;
+    return svg;
   }
 
   // ---------- screen: tutorial ----------
@@ -668,20 +671,7 @@ svg { display: block; width: 100%; height: auto; }
         nodesSvg += `<circle class="node-empty" cx="${p.x}" cy="${p.y}" r="${radius*0.55}" data-key="${nk}" style="${clickable?'':'pointer-events:none;opacity:0.4;'}"/>`;
       } else {
         const {p: frP} = frustrationOf(tutorialGame, nk);
-        const fill = color==='B' ? 'var(--black-piece)' : 'var(--white-piece)';
-        const isChoosable = choosable.has(nk);
-
-        const delayVal = (keyHash(nk) % 100) / 100 * -1.0;
-        const animDelay = `animation-delay: ${delayVal.toFixed(2)}s;`;
-
-        if(frP>0){
-          const ringClass = 'frustrated-ring frustrated' + (isChoosable ? ' choosable' : '');
-          nodesSvg += `<circle class="${ringClass}" cx="${p.x}" cy="${p.y}" r="${radius+3}" style="stroke-opacity:${0.35+0.65*Math.min(frP,1)}; ${animDelay}" ${isChoosable?`data-key="${nk}"`:''}/>`;
-        }
-        nodesSvg += `<g class="piece-group${frP>0?' frustrated':''}${isChoosable?' choosable':''}" ${isChoosable?`data-key="${nk}"`:''} style="${frP>0 ? animDelay : ''}">`;
-        nodesSvg += `<circle class="piece" cx="${p.x}" cy="${p.y}" r="${radius}" fill="${fill}" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>`;
-        nodesSvg += faceSvg(p.x, p.y, radius, color, frP);
-        nodesSvg += `</g>`;
+        nodesSvg += renderPieceGroup(p, radius, color, frP, choosable.has(nk), nk);
       }
     }
 
@@ -719,7 +709,7 @@ svg { display: block; width: 100%; height: auto; }
     svg.querySelectorAll('.node-empty').forEach(el => {
       el.addEventListener('click', () => tutorialPlace(el.getAttribute('data-key')));
     });
-    svg.querySelectorAll('[data-key].choosable').forEach(el => {
+    svg.querySelectorAll('[data-key].choosable, [data-key].frustrated-ring').forEach(el => {
       el.addEventListener('click', () => tutorialFlip(el.getAttribute('data-key')));
     });
     const retryBtn = document.getElementById('fo-tutorial-retry');
@@ -843,20 +833,7 @@ svg { display: block; width: 100%; height: auto; }
         nodesSvg += `<circle class="node-empty" cx="${p.x}" cy="${p.y}" r="${radius*0.55}" data-key="${nk}" style="${clickable?'':'pointer-events:none;opacity:0.4;'}"/>`;
       } else {
         const {p: frP} = frustrationOf(game, nk);
-        const fill = color==='B' ? 'var(--black-piece)' : 'var(--white-piece)';
-        const isChoosable = choosable.has(nk);
-
-        const delayVal = (keyHash(nk) % 100) / 100 * -1.0;
-        const animDelay = `animation-delay: ${delayVal.toFixed(2)}s;`;
-
-        if(frP>0){
-          const ringClass = 'frustrated-ring frustrated' + (isChoosable ? ' choosable' : '');
-          nodesSvg += `<circle class="${ringClass}" cx="${p.x}" cy="${p.y}" r="${radius+3}" style="stroke-opacity:${0.35+0.65*Math.min(frP,1)}; ${animDelay}" ${isChoosable?`data-key="${nk}"`:''}/>`;
-        }
-        nodesSvg += `<g class="piece-group${frP>0?' frustrated':''}${isChoosable?' choosable':''}" ${isChoosable?`data-key="${nk}"`:''} style="${frP>0 ? animDelay : ''}">`;
-        nodesSvg += `<circle class="piece" cx="${p.x}" cy="${p.y}" r="${radius}" fill="${fill}" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>`;
-        nodesSvg += faceSvg(p.x, p.y, radius, color, frP);
-        nodesSvg += `</g>`;
+        nodesSvg += renderPieceGroup(p, radius, color, frP, choosable.has(nk), nk);
       }
     }
 
@@ -899,7 +876,7 @@ svg { display: block; width: 100%; height: auto; }
           <span class="fo-dot" style="background:${game.turn==='B' ? 'var(--black-piece)' : 'var(--white-piece)'}"></span>
           ${game.turn==='B' ? '黒' : '白'}の番
         </div>
-        <div class="fo-hint">${canAct ? '金色に光るコマを1つ選んで反転させてください。' : 'ロボットが考え中です…'}</div>`;
+        <div class="fo-hint">${canAct ? '黄色く光るコマを1つ選んで反転させてください。反転できるのはこの番のうちだけです。' : '相手(ロボット)の番なので、震えているコマも今は光りません。'}</div>`;
     } else {
       const canAct = interactive;
       statusHtml = `<div class="fo-turn-row">
@@ -948,7 +925,7 @@ svg { display: block; width: 100%; height: auto; }
     svg.querySelectorAll('.node-empty').forEach(el => {
       el.addEventListener('click', () => handlePlaceClick(el.getAttribute('data-key')));
     });
-    svg.querySelectorAll('[data-key].choosable').forEach(el => {
+    svg.querySelectorAll('[data-key].choosable, [data-key].frustrated-ring').forEach(el => {
       el.addEventListener('click', () => handleFlipClick(el.getAttribute('data-key')));
     });
     document.getElementById('fo-back').addEventListener('click', goMenu);
